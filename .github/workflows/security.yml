@@ -1,0 +1,48 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '17 3 * * 1'
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  trivy:
+    name: Trivy filesystem scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Scan repository
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: table
+          exit-code: '1'
+
+  dockerfile:
+    name: Dockerfile security scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Scan Dockerfile
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: config
+          scan-ref: Dockerfile
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: table
+          exit-code: '1'
