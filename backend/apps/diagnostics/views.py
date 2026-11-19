@@ -4,7 +4,7 @@ from uuid import uuid4
 from django.conf import settings
 from django.core import signing
 from django.core.exceptions import ImproperlyConfigured
-from rest_framework.exceptions import AuthenticationFailed, NotFound, ValidationError
+from rest_framework.exceptions import AuthenticationFailed, PermissionDenied, ValidationError
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -71,6 +71,13 @@ def _execution_from_capability(payload: dict) -> ExecutionReference:
     )
 
 
+def _ensure_stateless_runs_enabled() -> None:
+    if not settings.DCC_STATELESS_RUN_API_ENABLED:
+        raise PermissionDenied(
+            "The stateless run API is disabled until its private access boundary is configured."
+        )
+
+
 def _lifecycle() -> ECSStatelessJobLifecycle:
     try:
         return ECSStatelessJobLifecycle()
@@ -95,15 +102,24 @@ class StatelessRunCollectionView(APIView):
     """Create a bounded ECS run and return its short-lived bearer capability."""
 
     def post(self, request: Request) -> Response:
-        serializer = DiagnosticRunRequestSerializer(data=request.data)
+        _ensure_stateless_runs_enabled()
+        serializer = DiagnosticRunRequestSerializer(
+            data=request.data,
+            context={},
+        )
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
+        if data["test_type"] != "runtime_health":
+            raise ValidationError({
+                "test_type": "This test adapter is not implemented in the current release."
+            })
         limits = data["limits"]
         run_id = str(uuid4())
 
         execution = _lifecycle().start(
             run_id=run_id,
             target_task_id=data["target_task_id"],
+            target_cluster_arn=serializer.context["target_cluster_arn"],
             max_duration_seconds=limits["max_duration_seconds"],
         )
         token = _run_capability(run_id, execution, data)
@@ -127,6 +143,7 @@ class StatelessRunDetailView(APIView):
     """Read ECS state using only the signed capability returned at creation."""
 
     def get(self, request: Request, run_id: str) -> Response:
+        _ensure_stateless_runs_enabled()
         payload = _load_run_capability(request, run_id)
         snapshot = _lifecycle().status(run_id, _execution_from_capability(payload))
         return Response(
@@ -155,6 +172,7 @@ class StatelessRunCancelView(APIView):
     """Cancel a run using its short-lived signed capability."""
 
     def post(self, request: Request, run_id: str) -> Response:
+        _ensure_stateless_runs_enabled()
         payload = _load_run_capability(request, run_id)
         _lifecycle().cancel(run_id, _execution_from_capability(payload))
         return Response(
