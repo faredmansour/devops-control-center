@@ -1,9 +1,8 @@
 from datetime import datetime, timezone
-from unittest import TestCase
 from unittest.mock import Mock
 
 from botocore.exceptions import ClientError
-from django.test import override_settings
+from django.test import SimpleTestCase, override_settings
 
 from apps.diagnostics.ecs_lifecycle import ECSStatelessJobLifecycle
 from apps.diagnostics.models import ExecutionReference
