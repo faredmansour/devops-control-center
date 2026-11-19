@@ -59,7 +59,7 @@ def _load_run_capability(request: Request, run_id: str) -> dict:
     except signing.BadSignature:
         raise AuthenticationFailed("The run capability token is invalid.") from None
 
-    if not isinstance(payload, dict) or payload.get("run_id") != run_id:
+    if not isinstance(payload, dict) or payload.get("run_id") != str(run_id):
         raise AuthenticationFailed("The run capability does not match this run.")
     if payload.get("provider") != "ecs" or not payload.get("task_arn") or not payload.get("cluster"):
         raise AuthenticationFailed("The run capability is invalid.")
