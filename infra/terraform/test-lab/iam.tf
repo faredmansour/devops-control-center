@@ -169,3 +169,104 @@ resource "aws_iam_role_policy" "dcc_ecs_discovery" {
   role   = aws_iam_role.diagnostic_task.id
   policy = data.aws_iam_policy_document.dcc_ecs_discovery.json
 }
+
+# A one-time EventBridge Scheduler role stops diagnostic Fargate tasks even if
+# the Django control-plane process restarts or becomes unavailable.
+resource "aws_scheduler_schedule_group" "dcc_cleanup" {
+  name = "${var.name_prefix}-dcc-cleanup"
+
+  tags = {
+    Name    = "${var.name_prefix}-dcc-cleanup"
+    Project = var.project_name
+  }
+}
+
+data "aws_iam_policy_document" "scheduler_cleanup_trust" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["scheduler.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:SourceAccount"
+      values   = [data.aws_caller_identity.current.account_id]
+    }
+
+    condition {
+      test     = "ArnLike"
+      variable = "aws:SourceArn"
+      values   = [aws_scheduler_schedule_group.dcc_cleanup.arn]
+    }
+  }
+}
+
+resource "aws_iam_role" "scheduler_cleanup" {
+  name               = "${var.name_prefix}-scheduler-cleanup-role"
+  assume_role_policy = data.aws_iam_policy_document.scheduler_cleanup_trust.json
+
+  tags = {
+    Name    = "${var.name_prefix}-scheduler-cleanup-role"
+    Project = var.project_name
+  }
+}
+
+data "aws_iam_policy_document" "scheduler_cleanup" {
+  statement {
+    sid       = "StopOnlyDCCDiagnosticTasks"
+    effect    = "Allow"
+    actions   = ["ecs:StopTask"]
+    resources = [
+      "arn:${data.aws_partition.current.partition}:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:task/${aws_ecs_cluster.test_lab.name}/*"
+    ]
+
+    condition {
+      test     = "ArnEquals"
+      variable = "ecs:cluster"
+      values   = [aws_ecs_cluster.test_lab.arn]
+    }
+  }
+}
+
+resource "aws_iam_role_policy" "scheduler_cleanup" {
+  name   = "${var.name_prefix}-scheduler-cleanup-policy"
+  role   = aws_iam_role.scheduler_cleanup.id
+  policy = data.aws_iam_policy_document.scheduler_cleanup.json
+}
+
+data "aws_iam_policy_document" "dcc_scheduler_control" {
+  statement {
+    sid    = "ManageOnlyDCCCleanupSchedules"
+    effect = "Allow"
+    actions = [
+      "scheduler:CreateSchedule",
+      "scheduler:DeleteSchedule",
+    ]
+    resources = [
+      "arn:${data.aws_partition.current.partition}:scheduler:${var.aws_region}:${data.aws_caller_identity.current.account_id}:schedule/${aws_scheduler_schedule_group.dcc_cleanup.name}/*"
+    ]
+  }
+
+  statement {
+    sid       = "PassOnlySchedulerCleanupRole"
+    effect    = "Allow"
+    actions   = ["iam:PassRole"]
+    resources = [aws_iam_role.scheduler_cleanup.arn]
+
+    condition {
+      test     = "StringEquals"
+      variable = "iam:PassedToService"
+      values   = ["scheduler.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role_policy" "dcc_scheduler_control" {
+  name   = "${var.name_prefix}-dcc-scheduler-control-policy"
+  role   = aws_iam_role.diagnostic_task.id
+  policy = data.aws_iam_policy_document.dcc_scheduler_control.json
+}
