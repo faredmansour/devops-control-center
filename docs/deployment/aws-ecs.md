@@ -377,3 +377,11 @@ group.
 
 See [the Task 51 apply record](../../infra/terraform/test-lab/APPLY_REPORT.md)
 for resource identifiers and detailed verification.
+
+## Stateless run API activation gate
+
+The stateless endpoints are available at `/api/diagnostic-sessions/runs/`, but `DCC_STATELESS_RUN_API_ENABLED` defaults to `false`. Keep it false on any public or broadly reachable ingress. The create endpoint does not yet have user authentication or tenant authorization; a signed per-run token only protects status and cancellation after creation. Do not enable the feature on the current public ALB until the ingress is restricted to trusted operators or proper OIDC authentication is added.
+
+Before enabling it in a private staging environment, configure `DCC_DIAGNOSTIC_PROVIDER=ecs`, the dedicated short-lived diagnostic task definition and container, diagnostic cluster, private subnets/security group, `DCC_ECS_CLEANUP_ROLE_ARN`, and `DCC_ECS_CLEANUP_SCHEDULE_GROUP`. The current Test Lab Terraform defines the scheduler group/role but does not yet define a dedicated diagnostic runner task definition; the existing Test Worker service is a long-running lab worker and must not be reused as the on-demand diagnostic runner. Only `runtime_health` is currently wired to this API; load, security, database, and API smoke adapters are not implemented here.
+
+The API returns a one-time capability token in the create response. The frontend must retain it only in volatile memory for the active run and send it as `X-DCC-Run-Token` on status/cancel requests. Never persist it in local storage, session storage, logs, analytics, or URLs. A browser refresh loses access by design; there is no run history lookup.
