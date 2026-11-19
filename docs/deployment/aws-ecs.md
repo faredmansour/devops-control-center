@@ -392,3 +392,6 @@ The API returns a one-time capability token in the create response. The frontend
 The one-shot runner sends its result to the private Cloud Map endpoint using the configured namespace. The callback token is purpose-bound and run-bound, and is accepted once. The DCC process keeps the normalized result in a thread-safe in-memory TTL store for 600 seconds; it is not written to a database, Redis, S3, or detailed CloudWatch logs.
 
 This implementation relies on the current single DCC ECS service task and Gunicorn workers=1 configuration. A DCC task restart drops pending results, and horizontal scaling or adding Gunicorn workers would break process-local result retrieval. Keep the service at one task and one Gunicorn worker until a different ephemeral result transport is approved. Keep DCC_STATELESS_RUN_API_ENABLED=false until the private ingress boundary and Authentication are addressed.
+
+
+If the runner's ECS inspection request fails, it attempts to submit a signed `failed` result before exiting non-zero. A hard task termination or callback network failure can still prevent delivery; in that case the API reports task lifecycle information only and does not claim the test passed.

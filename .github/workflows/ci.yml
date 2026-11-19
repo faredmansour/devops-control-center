@@ -93,13 +93,10 @@ jobs:
           terraform_wrapper: false
 
       - name: Check Terraform formatting
-        run: terraform fmt -diff -recursive
+        run: terraform fmt -check -recursive
 
       - name: Initialize Terraform without backend
-        run: terraform init -backend=false -input=false -upgrade
-
-      - name: Show regenerated provider lock file
-        run: cat .terraform.lock.hcl
+        run: terraform init -backend=false -input=false -lockfile=readonly
 
       - name: Validate Terraform configuration
         run: terraform validate -no-color
