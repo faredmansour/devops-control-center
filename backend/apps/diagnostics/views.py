@@ -9,10 +9,13 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.api.ecs_discovery import ECSDiscoveryError, get_ecs_discovery_provider
+
 from apps.diagnostics.contracts import DiagnosticRunRequestSerializer
 from apps.diagnostics.ecs_lifecycle import ECSStatelessJobLifecycle
 from apps.diagnostics.models import ExecutionReference
 from apps.diagnostics.providers import DiagnosticProviderError
+from apps.diagnostics.services import DiagnosticExecutionFailure
 from apps.diagnostics.serializers import (
     CreateDiagnosticSessionSerializer,
     DiagnosticSessionSerializer,
@@ -78,6 +81,23 @@ def _ensure_stateless_runs_enabled() -> None:
         )
 
 
+def _resolve_target_cluster_arn(target_task_id: str) -> str:
+    try:
+        task = get_ecs_discovery_provider().get_running_task(target_task_id)
+    except ECSDiscoveryError:
+        raise ValidationError(
+            {"target_task_id": "AWS ECS target discovery is unavailable."}
+        ) from None
+    if task is None:
+        raise ValidationError({"target_task_id": "The target ECS task was not found."})
+    if task.get("last_status") != "RUNNING":
+        raise ValidationError({"target_task_id": "The target ECS task is not running."})
+    cluster_arn = task.get("cluster_arn")
+    if not cluster_arn:
+        raise ValidationError({"target_task_id": "The target ECS cluster could not be resolved."})
+    return cluster_arn
+
+
 def _lifecycle() -> ECSStatelessJobLifecycle:
     try:
         return ECSStatelessJobLifecycle()
@@ -114,14 +134,18 @@ class StatelessRunCollectionView(APIView):
                 "test_type": "This test adapter is not implemented in the current release."
             })
         limits = data["limits"]
+        target_cluster_arn = _resolve_target_cluster_arn(data["target_task_id"])
         run_id = str(uuid4())
 
-        execution = _lifecycle().start(
-            run_id=run_id,
-            target_task_id=data["target_task_id"],
-            target_cluster_arn=serializer.context["target_cluster_arn"],
-            max_duration_seconds=limits["max_duration_seconds"],
-        )
+        try:
+            execution = _lifecycle().start(
+                run_id=run_id,
+                target_task_id=data["target_task_id"],
+                target_cluster_arn=target_cluster_arn,
+                max_duration_seconds=limits["max_duration_seconds"],
+            )
+        except DiagnosticProviderError:
+            raise DiagnosticExecutionFailure() from None
         token = _run_capability(run_id, execution, data)
         return Response(
             {
@@ -145,7 +169,10 @@ class StatelessRunDetailView(APIView):
     def get(self, request: Request, run_id: str) -> Response:
         _ensure_stateless_runs_enabled()
         payload = _load_run_capability(request, run_id)
-        snapshot = _lifecycle().status(run_id, _execution_from_capability(payload))
+        try:
+            snapshot = _lifecycle().status(run_id, _execution_from_capability(payload))
+        except DiagnosticProviderError:
+            raise DiagnosticExecutionFailure() from None
         return Response(
             {
                 "schema_version": 1,
@@ -174,7 +201,10 @@ class StatelessRunCancelView(APIView):
     def post(self, request: Request, run_id: str) -> Response:
         _ensure_stateless_runs_enabled()
         payload = _load_run_capability(request, run_id)
-        _lifecycle().cancel(run_id, _execution_from_capability(payload))
+        try:
+            _lifecycle().cancel(run_id, _execution_from_capability(payload))
+        except DiagnosticProviderError:
+            raise DiagnosticExecutionFailure() from None
         return Response(
             {
                 "schema_version": 1,
