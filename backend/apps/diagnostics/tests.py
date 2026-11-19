@@ -1527,3 +1527,133 @@ class DiagnosticExecutionFailureTests(ECSDiscoveryTestMixin, TestCase):
         response_data = session_data(failed)
         self.assertNotIn("private-task-arn", str(response_data))
         self.assertEqual(response_data["execution"]["provider"], "ecs")
+
+
+class StatelessRunAPITests(SimpleTestCase):
+    RUN_ID = "123e4567-e89b-42d3-a456-426614174000"
+    EXECUTION = ExecutionReference(
+        provider="ecs",
+        reference="arn:aws:ecs:us-east-1:123456789012:task/dcc/abc",
+        cluster="arn:aws:ecs:us-east-1:123456789012:cluster/dcc",
+    )
+
+    def setUp(self):
+        self.client = APIClient()
+        self.lifecycle = Mock()
+        self.lifecycle.start.return_value = self.EXECUTION
+        self.lifecycle.status.return_value = Mock(
+            last_status="RUNNING",
+            desired_status="RUNNING",
+            stopped_reason=None,
+            started_at=datetime(2026, 11, 19, tzinfo=timezone.utc),
+            stopped_at=None,
+        )
+
+    @override_settings(DCC_RUN_CAPABILITY_TTL_SECONDS=600)
+    @patch("apps.diagnostics.views.uuid4")
+    @patch("apps.diagnostics.views._lifecycle")
+    def test_create_run_returns_short_lived_capability(self, lifecycle_factory, uuid_factory):
+        uuid_factory.return_value = self.RUN_ID
+        lifecycle_factory.return_value = self.lifecycle
+        response = self.client.post(
+            "/api/diagnostic-sessions/runs/",
+            {
+                "schema_version": 1,
+                "test_type": "runtime_health",
+                "environment": "production",
+                "target_task_id": "task-123",
+                "limits": {"max_duration_seconds": 120},
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data["run_id"], self.RUN_ID)
+        self.assertEqual(response.data["status"], "queued")
+        self.assertEqual(response.data["capability_expires_in"], 600)
+        self.assertTrue(response.data["capability_token"])
+        self.assertEqual(
+            self.lifecycle.start.call_args.kwargs["max_duration_seconds"],
+            120,
+        )
+
+    @patch("apps.diagnostics.views._lifecycle")
+    def test_status_uses_signed_capability_and_ecs(self, lifecycle_factory):
+        lifecycle_factory.return_value = self.lifecycle
+        create_response = self._create_run()
+        token = create_response.data["capability_token"]
+
+        response = self.client.get(
+            f"/api/diagnostic-sessions/runs/{self.RUN_ID}/",
+            HTTP_X_DCC_RUN_TOKEN=token,
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["status"], "running")
+        self.lifecycle.status.assert_called_once()
+
+    @patch("apps.diagnostics.views._lifecycle")
+    def test_cancel_uses_signed_capability(self, lifecycle_factory):
+        lifecycle_factory.return_value = self.lifecycle
+        token = self._create_run().data["capability_token"]
+
+        response = self.client.post(
+            f"/api/diagnostic-sessions/runs/{self.RUN_ID}/cancel/",
+            {},
+            format="json",
+            HTTP_X_DCC_RUN_TOKEN=token,
+        )
+
+        self.assertEqual(response.status_code, 202, response.data)
+        self.assertEqual(response.data["status"], "cancellation_requested")
+        self.lifecycle.cancel.assert_called_once()
+
+    def test_status_rejects_missing_capability(self):
+        response = self.client.get(
+            f"/api/diagnostic-sessions/runs/{self.RUN_ID}/"
+        )
+        self.assertEqual(response.status_code, 401)
+
+    @patch("apps.diagnostics.views._lifecycle")
+    def test_status_rejects_capability_for_another_run(self, lifecycle_factory):
+        lifecycle_factory.return_value = self.lifecycle
+        token = self._create_run().data["capability_token"]
+        other_run_id = "123e4567-e89b-42d3-a456-426614174001"
+
+        response = self.client.get(
+            f"/api/diagnostic-sessions/runs/{other_run_id}/",
+            HTTP_X_DCC_RUN_TOKEN=token,
+        )
+
+        self.assertEqual(response.status_code, 401)
+        self.lifecycle.status.assert_not_called()
+
+    @patch("apps.diagnostics.views._lifecycle")
+    def test_status_rejects_expired_capability(self, lifecycle_factory):
+        lifecycle_factory.return_value = self.lifecycle
+        token = self._create_run().data["capability_token"]
+        with override_settings(DCC_RUN_CAPABILITY_TTL_SECONDS=-1):
+            response = self.client.get(
+                f"/api/diagnostic-sessions/runs/{self.RUN_ID}/",
+                HTTP_X_DCC_RUN_TOKEN=token,
+            )
+
+        self.assertEqual(response.status_code, 401)
+        self.lifecycle.status.assert_not_called()
+
+    def _create_run(self):
+        from unittest.mock import patch
+
+        with patch("apps.diagnostics.views.uuid4", return_value=self.RUN_ID):
+            with patch("apps.diagnostics.views._lifecycle", return_value=self.lifecycle):
+                return self.client.post(
+                    "/api/diagnostic-sessions/runs/",
+                    {
+                        "schema_version": 1,
+                        "test_type": "runtime_health",
+                        "environment": "production",
+                        "target_task_id": "task-123",
+                        "limits": {"max_duration_seconds": 120},
+                    },
+                    format="json",
+                )
