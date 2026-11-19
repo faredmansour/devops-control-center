@@ -107,12 +107,20 @@ def main() -> int:
             target_task_id=target_task_id,
         )
     except (BotoCoreError, ClientError):
+        # Report an explicit failed result rather than leaving the run pending
+        # until the ECS cleanup timer fires.
         logger.error(json.dumps({
             "event": "diagnostic_run_failed",
             "reason": "AWS ECS target inspection failed.",
             "run_id": run_id,
         }))
-        return 2
+        result = {
+            "status": "failed",
+            "reason": "AWS ECS target inspection failed.",
+            "task_last_status": "UNKNOWN",
+            "task_health_status": "UNKNOWN",
+            "containers": [],
+        }
 
     finished_at = datetime.now(timezone.utc)
     callback_payload = {
