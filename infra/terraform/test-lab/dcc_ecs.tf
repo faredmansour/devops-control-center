@@ -69,6 +69,10 @@ resource "aws_ecs_task_definition" "dcc_app" {
         { name = "AWS_REGION", value = var.aws_region },
         { name = "AWS_DEFAULT_REGION", value = var.aws_region },
         { name = "DCC_ECS_CLUSTERS", value = aws_ecs_cluster.test_lab.name },
+        { name = "DCC_ECS_CLEANUP_ROLE_ARN", value = aws_iam_role.scheduler_cleanup.arn },
+        { name = "DCC_ECS_CLEANUP_SCHEDULE_GROUP", value = aws_scheduler_schedule_group.dcc_cleanup.name },
+        { name = "DCC_RUN_CAPABILITY_TTL_SECONDS", value = "1800" },
+        { name = "DCC_STATELESS_RUN_API_ENABLED", value = "false" },
       ]
       secrets = [
         {
@@ -136,6 +140,8 @@ resource "aws_ecs_service" "dcc_app" {
     aws_cloudwatch_log_group.dcc_app,
     aws_iam_role_policy.ecs_execution,
     aws_iam_role_policy.dcc_ecs_discovery,
+    aws_iam_role_policy.dcc_scheduler_control,
+    aws_iam_role_policy.scheduler_cleanup,
     aws_secretsmanager_secret_version.dcc_django_key,
   ]
 
