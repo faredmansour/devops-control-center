@@ -80,6 +80,10 @@ DCC_ECS_CONTAINER_NAME = os.environ.get("DCC_ECS_CONTAINER_NAME", "").strip()
 DCC_ECS_ASSIGN_PUBLIC_IP = env_bool("DCC_ECS_ASSIGN_PUBLIC_IP", default=False)
 DCC_ECS_MAX_TASK_CPU = env_int("DCC_ECS_MAX_TASK_CPU", 1024)
 DCC_ECS_MAX_TASK_MEMORY_MIB = env_int("DCC_ECS_MAX_TASK_MEMORY_MIB", 2048)
+DCC_ECS_CLEANUP_ROLE_ARN = os.environ.get("DCC_ECS_CLEANUP_ROLE_ARN", "").strip()
+DCC_ECS_CLEANUP_SCHEDULE_GROUP = os.environ.get(
+    "DCC_ECS_CLEANUP_SCHEDULE_GROUP", "default"
+).strip()
 DCC_DIAGNOSTIC_PROVIDER = os.environ.get(
     "DCC_DIAGNOSTIC_PROVIDER", "inmemory"
 ).strip().lower()
