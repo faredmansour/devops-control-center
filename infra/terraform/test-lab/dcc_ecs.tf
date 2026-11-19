@@ -78,6 +78,8 @@ resource "aws_ecs_task_definition" "dcc_app" {
         { name = "DCC_ECS_CLEANUP_ROLE_ARN", value = aws_iam_role.scheduler_cleanup.arn },
         { name = "DCC_ECS_CLEANUP_SCHEDULE_GROUP", value = aws_scheduler_schedule_group.dcc_cleanup.name },
         { name = "DCC_RUN_CAPABILITY_TTL_SECONDS", value = "1800" },
+        { name = "DCC_RUN_RESULT_RETENTION_SECONDS", value = "600" },
+        { name = "DCC_RESULT_CALLBACK_BASE_URL", value = "http://dcc-app.${var.cloud_map_namespace_name}:8000" },
         { name = "DCC_STATELESS_RUN_API_ENABLED", value = "false" },
       ]
       secrets = [
@@ -190,6 +192,7 @@ resource "aws_ecs_task_definition" "diagnostic_runner" {
         { name = "AWS_REGION", value = var.aws_region },
         { name = "AWS_DEFAULT_REGION", value = var.aws_region },
         { name = "LOG_LEVEL", value = "INFO" },
+        { name = "DCC_RESULT_CALLBACK_BASE_URL", value = "http://dcc-app.${var.cloud_map_namespace_name}:8000/api/diagnostic-sessions/runs" },
       ]
       logConfiguration = {
         logDriver = "awslogs"

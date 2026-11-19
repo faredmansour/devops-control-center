@@ -77,12 +77,20 @@ class ECSDiagnosticExecutionProvider:
         session_id: str,
         target_task_id: str,
         target_cluster_arn: str | None = None,
+        extra_environment: dict[str, str] | None = None,
     ) -> ExecutionReference:
         if not is_valid_session_id(session_id):
             raise DiagnosticProviderError("The diagnostic session ID is invalid.")
         if not is_valid_task_id(target_task_id):
             raise DiagnosticProviderError("The diagnostic target task ID is invalid.")
         self._validate_task_definition()
+        allowed_extra_names = {"DCC_RESULT_CALLBACK_URL", "DCC_RESULT_CALLBACK_TOKEN"}
+        extra_environment = extra_environment or {}
+        if (set(extra_environment).difference(allowed_extra_names)
+                or any(not isinstance(value, str) or not value or len(value) > 4096
+                       for value in extra_environment.values())):
+            raise DiagnosticProviderError("The diagnostic runner overrides are invalid.")
+
         request: dict[str, Any] = {
             "cluster": self._config.cluster,
             "taskDefinition": self._config.task_definition,
@@ -107,6 +115,8 @@ class ECSDiagnosticExecutionProvider:
                             if target_cluster_arn
                             else []
                         ),
+                        *[{"name": name, "value": value}
+                          for name, value in sorted(extra_environment.items())],
                     ],
                 }]
             },

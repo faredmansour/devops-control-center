@@ -1529,7 +1529,7 @@ class DiagnosticExecutionFailureTests(ECSDiscoveryTestMixin, TestCase):
         self.assertEqual(response_data["execution"]["provider"], "ecs")
 
 
-@override_settings(DCC_STATELESS_RUN_API_ENABLED=True, DCC_RUN_CAPABILITY_TTL_SECONDS=600)
+@override_settings(DCC_STATELESS_RUN_API_ENABLED=True, DCC_RUN_CAPABILITY_TTL_SECONDS=600, DCC_RUN_RESULT_RETENTION_SECONDS=600, DCC_RESULT_CALLBACK_BASE_URL="http://dcc-app.dcc-test.internal:8000")
 class StatelessRunAPITests(SimpleTestCase):
     RUN_ID = "123e4567-e89b-42d3-a456-426614174000"
     EXECUTION = ExecutionReference(

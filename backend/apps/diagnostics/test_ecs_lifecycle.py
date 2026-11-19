@@ -59,6 +59,20 @@ class ECSStatelessJobLifecycleTests(SimpleTestCase):
         self.assertEqual(kwargs["Target"]["RoleArn"], "arn:aws:iam::123456789012:role/dcc-scheduler-stop")
         self.assertIn(self.execution.reference, kwargs["Target"]["Input"])
 
+    def test_start_passes_only_explicit_runner_callback_overrides(self):
+        overrides = {
+            "DCC_RESULT_CALLBACK_URL": "http://dcc-app.dcc-test.internal:8000/result/",
+            "DCC_RESULT_CALLBACK_TOKEN": "signed-token",
+        }
+        self.lifecycle.start(
+            "123e4567-e89b-42d3-a456-426614174000",
+            "task-123", "cluster-arn", runner_environment=overrides,
+        )
+        self.provider.start.assert_called_once_with(
+            "123e4567-e89b-42d3-a456-426614174000",
+            "task-123", "cluster-arn", extra_environment=overrides,
+        )
+
     def test_start_stops_task_if_schedule_registration_fails(self):
         self.scheduler.create_schedule.side_effect = ClientError(
             {"Error": {"Code": "AccessDeniedException", "Message": "denied"}},

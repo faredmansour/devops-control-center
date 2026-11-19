@@ -7,6 +7,9 @@ import json
 import logging
 import os
 import sys
+import urllib.error
+import urllib.request
+from datetime import datetime, timezone
 from typing import Any
 
 import boto3
@@ -85,8 +88,11 @@ def main() -> int:
     target_task_id = os.environ.get("TARGET_TASK_ID", "").strip()
     target_cluster_arn = os.environ.get("TARGET_CLUSTER_ARN", "").strip()
     region = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION")
+    callback_url = os.environ.get("DCC_RESULT_CALLBACK_URL", "").strip()
+    callback_token = os.environ.get("DCC_RESULT_CALLBACK_TOKEN", "").strip()
+    started_at = datetime.now(timezone.utc)
 
-    if not all((run_id, target_task_id, target_cluster_arn, region)):
+    if not all((run_id, target_task_id, target_cluster_arn, region, callback_url, callback_token)):
         logger.error(json.dumps({
             "event": "diagnostic_run_failed",
             "reason": "Required runner configuration is missing.",
@@ -101,21 +107,44 @@ def main() -> int:
             target_task_id=target_task_id,
         )
     except (BotoCoreError, ClientError):
-        logger.exception(json.dumps({
+        logger.error(json.dumps({
             "event": "diagnostic_run_failed",
             "reason": "AWS ECS target inspection failed.",
             "run_id": run_id,
         }))
         return 2
 
-    # Do not write customer task/container details or the result payload to
-    # CloudWatch Logs. A short operational event is sufficient for now; result
-    # delivery is implemented separately from ECS task lifecycle.
+    finished_at = datetime.now(timezone.utc)
+    callback_payload = {
+        "schema_version": 1, "run_id": run_id, "test_type": "runtime_health",
+        "result_status": result["status"], "summary": result["reason"],
+        "task_last_status": result.get("task_last_status", "UNKNOWN"),
+        "task_health_status": result.get("task_health_status", "UNKNOWN"),
+        "containers": [{
+            "name": item.get("name", "unknown"),
+            "last_status": item.get("last_status", "UNKNOWN"),
+            "health_status": item.get("health_status", "UNKNOWN"),
+            "exit_code": item.get("exit_code"),
+            "reason": item.get("reason") or "",
+        } for item in result.get("containers", [])],
+        "started_at": started_at.isoformat(), "finished_at": finished_at.isoformat(),
+    }
+    callback_request = urllib.request.Request(
+        callback_url, data=json.dumps(callback_payload).encode("utf-8"),
+        headers={"Content-Type": "application/json", "X-DCC-Result-Token": callback_token},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(callback_request, timeout=10) as response:
+            if response.status not in {200, 202}:
+                raise RuntimeError("Unexpected callback response.")
+    except (urllib.error.URLError, TimeoutError, RuntimeError, ValueError):
+        logger.error(json.dumps({"event": "diagnostic_result_callback_failed", "run_id": run_id}))
+        return 2
+
     logger.info(json.dumps({
-        "event": "diagnostic_run_finished",
-        "run_id": run_id,
-        "test_type": "runtime_health",
-        "result_status": result["status"],
+        "event": "diagnostic_run_finished", "run_id": run_id,
+        "test_type": "runtime_health", "result_status": result["status"],
     }))
 
     return 0 if result["status"] in {"healthy", "unknown"} else 1

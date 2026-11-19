@@ -122,4 +122,13 @@ A separate module, `apps.diagnostics.runner`, is executed as a one-shot ECS Farg
 - A one-time EventBridge Scheduler deadline independently stops the runner task.
 - CloudWatch receives only a minimal operational completion event; detailed target/container findings are not written to logs.
 
-**Important limitation:** The runner result is not yet delivered back through the stateless API. The API still exposes ECS task lifecycle state only, and ECS `STOPPED` must not be interpreted as a passed test. A short-lived, signed result callback and transient result retrieval endpoint remain the next implementation step. The API feature flag stays disabled.
+**Important limitation:** The signed callback and transient result retrieval are implemented, but the result store is process-local and depends on the current single DCC task and one Gunicorn worker. ECS `STOPPED` must not be interpreted as a passed test when no callback result is available. The API feature flag stays disabled.
+
+
+## 11. Short-lived signed result callback
+
+The one-shot runner posts a bounded runtime-health result to the private DCC service-discovery address. The callback uses a separate Django-signed token scoped to one run and one purpose; it is passed only to the fixed runner container as an ECS environment override. The callback endpoint accepts one result per run and rejects expired, mismatched, duplicate, or schema-invalid payloads.
+
+The API stores normalized results only in a process-local, thread-safe TTL store. The current Test Lab has one DCC ECS service task and Gunicorn starts with one worker and multiple threads; this is a deliberate constraint for this volatile-memory implementation. Results disappear after the configured 600-second TTL, and a DCC task restart also loses in-memory results. Do not scale the DCC service horizontally or increase Gunicorn worker count until a shared ephemeral transport is designed. This is not durable storage and is not a report-history feature.
+
+The runner reaches DCC through private Cloud Map DNS. Security-group rules allow only the diagnostic-runner security group to reach the DCC task on port 8000. Detailed findings are returned only through the run capability endpoint; CloudWatch receives no detailed findings. Authentication is still deferred, so keep the stateless API disabled and do not expose it as a public SaaS endpoint.

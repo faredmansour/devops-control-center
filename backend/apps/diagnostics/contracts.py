@@ -123,3 +123,39 @@ class DiagnosticRunResultSerializer(StrictSerializer):
                 "finished_at": "A terminal run must include its finish timestamp."
             })
         return attrs
+
+
+class DiagnosticRunContainerResultSerializer(StrictSerializer):
+    name = serializers.CharField(max_length=128)
+    last_status = serializers.CharField(max_length=32)
+    health_status = serializers.CharField(max_length=32)
+    exit_code = serializers.IntegerField(allow_null=True)
+    reason = serializers.CharField(max_length=500, allow_blank=True)
+
+
+class DiagnosticRunCallbackSerializer(StrictSerializer):
+    """Bounded payload accepted from a short-lived diagnostic runner."""
+    schema_version = serializers.IntegerField()
+    run_id = serializers.UUIDField()
+    test_type = serializers.ChoiceField(choices=("runtime_health",))
+    result_status = serializers.ChoiceField(choices=("healthy", "failed", "unknown"))
+    summary = serializers.CharField(max_length=2000)
+    task_last_status = serializers.CharField(max_length=32)
+    task_health_status = serializers.CharField(max_length=32)
+    containers = DiagnosticRunContainerResultSerializer(many=True, max_length=50)
+    started_at = serializers.DateTimeField()
+    finished_at = serializers.DateTimeField()
+
+    def validate_schema_version(self, value):
+        if value != RUN_SCHEMA_VERSION:
+            raise serializers.ValidationError(
+                f"Unsupported schema version. Expected {RUN_SCHEMA_VERSION}."
+            )
+        return value
+
+    def validate(self, attrs):
+        if attrs["finished_at"] < attrs["started_at"]:
+            raise serializers.ValidationError({
+                "finished_at": "Finish time cannot be earlier than start time."
+            })
+        return attrs

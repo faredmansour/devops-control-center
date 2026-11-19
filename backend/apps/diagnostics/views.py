@@ -11,7 +11,8 @@ from rest_framework.views import APIView
 
 from apps.api.ecs_discovery import ECSDiscoveryError, get_ecs_discovery_provider
 
-from apps.diagnostics.contracts import DiagnosticRunRequestSerializer
+from apps.diagnostics.contracts import DiagnosticRunCallbackSerializer, DiagnosticRunRequestSerializer
+from apps.diagnostics.result_store import get_result, store_result
 from apps.diagnostics.ecs_lifecycle import ECSStatelessJobLifecycle
 from apps.diagnostics.models import ExecutionReference
 from apps.diagnostics.providers import DiagnosticProviderError
@@ -25,6 +26,33 @@ from apps.diagnostics.services import diagnostic_session_service, session_data
 
 logger = logging.getLogger(__name__)
 RUN_CAPABILITY_SALT = "diagnostics.stateless-run-capability.v1"
+RUN_RESULT_CALLBACK_SALT = "diagnostics.stateless-run-result-callback.v1"
+
+
+def _result_callback_token(run_id: str) -> str:
+    return signing.dumps(
+        {"run_id": str(run_id), "purpose": "diagnostic_result_callback"},
+        salt=RUN_RESULT_CALLBACK_SALT, compress=True,
+    )
+
+
+def _load_result_callback_token(request: Request, run_id: str) -> None:
+    token = request.headers.get("X-DCC-Result-Token", "").strip()
+    if not token:
+        raise AuthenticationFailed("A result callback token is required.")
+    try:
+        payload = signing.loads(
+            token, salt=RUN_RESULT_CALLBACK_SALT,
+            max_age=settings.DCC_RUN_CAPABILITY_TTL_SECONDS,
+        )
+    except signing.SignatureExpired:
+        raise AuthenticationFailed("The result callback token has expired.") from None
+    except signing.BadSignature:
+        raise AuthenticationFailed("The result callback token is invalid.") from None
+    if (not isinstance(payload, dict) or payload.get("run_id") != str(run_id)
+            or payload.get("purpose") != "diagnostic_result_callback"):
+        raise AuthenticationFailed("The result callback token is invalid.")
+
 
 
 def _run_capability(run_id: str, execution: ExecutionReference, request_data: dict) -> str:
@@ -137,12 +165,21 @@ class StatelessRunCollectionView(APIView):
         target_cluster_arn = _resolve_target_cluster_arn(data["target_task_id"])
         run_id = str(uuid4())
 
+        callback_base_url = settings.DCC_RESULT_CALLBACK_BASE_URL.rstrip("/")
+        if not callback_base_url:
+            raise ValidationError({"detail": "The private result callback URL is not configured."})
+        callback_token = _result_callback_token(run_id)
+        callback_url = f"{callback_base_url}/api/diagnostic-sessions/runs/{run_id}/result/"
         try:
             execution = _lifecycle().start(
                 run_id=run_id,
                 target_task_id=data["target_task_id"],
                 target_cluster_arn=target_cluster_arn,
                 max_duration_seconds=limits["max_duration_seconds"],
+                runner_environment={
+                    "DCC_RESULT_CALLBACK_URL": callback_url,
+                    "DCC_RESULT_CALLBACK_TOKEN": callback_token,
+                },
             )
         except DiagnosticProviderError:
             raise DiagnosticExecutionFailure() from None
@@ -157,7 +194,8 @@ class StatelessRunCollectionView(APIView):
                 "ecs_task_arn": execution.reference,
                 "capability_token": token,
                 "capability_expires_in": settings.DCC_RUN_CAPABILITY_TTL_SECONDS,
-                "retention": "No run state is persisted by the DCC API.",
+                "result_retention_seconds": settings.DCC_RUN_RESULT_RETENTION_SECONDS,
+                "retention": "Result is held in volatile process memory for a short TTL; it is not persisted.",
             },
             status=201,
         )
@@ -170,6 +208,15 @@ class StatelessRunDetailView(APIView):
         _ensure_stateless_runs_enabled()
         payload = _load_run_capability(request, run_id)
         run_id = str(run_id)
+        completed_result = get_result(run_id)
+        if completed_result is not None:
+            final_status = "failed" if completed_result["result_status"] == "failed" else "completed"
+            return Response({
+                "schema_version": 1, "run_id": run_id,
+                "test_type": payload["test_type"], "environment": payload["environment"],
+                "status": final_status, "result": completed_result,
+                "retention": "This result is held in volatile process memory until its TTL expires.",
+            })
         try:
             snapshot = _lifecycle().status(run_id, _execution_from_capability(payload))
         except DiagnosticProviderError:
@@ -194,6 +241,23 @@ class StatelessRunDetailView(APIView):
                 ),
             }
         )
+
+
+class StatelessRunResultCallbackView(APIView):
+    """Accept one signed runner result and keep it only in volatile memory."""
+    def post(self, request: Request, run_id: str) -> Response:
+        _ensure_stateless_runs_enabled()
+        _load_result_callback_token(request, run_id)
+        serializer = DiagnosticRunCallbackSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        result = serializer.validated_data
+        if str(result["run_id"]) != str(run_id):
+            raise AuthenticationFailed("The callback payload does not match this run.")
+        if not store_result(str(run_id), serializer.data,
+                            ttl_seconds=settings.DCC_RUN_RESULT_RETENTION_SECONDS):
+            return Response({"detail": "A result has already been accepted for this run."}, status=409)
+        return Response({"run_id": str(run_id), "accepted": True,
+                         "expires_in": settings.DCC_RUN_RESULT_RETENTION_SECONDS}, status=202)
 
 
 class StatelessRunCancelView(APIView):

@@ -385,3 +385,10 @@ The stateless endpoints are available at `/api/diagnostic-sessions/runs/`, but `
 The Test Lab Terraform now defines a separate `dcc-diagnostic-runner` Fargate task definition, a dedicated read-only runner task role, a fixed ECS RunTask permission for the DCC task role, private subnet/security-group wiring, and a short-retention operational log group. The runner is not the long-running Test Worker and must remain a one-shot task. Only `runtime_health` is currently wired; load, security, database, and API smoke adapters are not implemented. The runner classifies ECS task/container health, but its normalized result callback and transient browser retrieval are not implemented yet. Keep `DCC_STATELESS_RUN_API_ENABLED=false` until result delivery and access control are completed.
 
 The API returns a one-time capability token in the create response. The frontend must retain it only in volatile memory for the active run and send it as `X-DCC-Run-Token` on status/cancel requests. Never persist it in local storage, session storage, logs, analytics, or URLs. A browser refresh loses access by design; there is no run history lookup.
+
+
+### Short-lived result callback
+
+The one-shot runner sends its result to the private Cloud Map endpoint using the configured namespace. The callback token is purpose-bound and run-bound, and is accepted once. The DCC process keeps the normalized result in a thread-safe in-memory TTL store for 600 seconds; it is not written to a database, Redis, S3, or detailed CloudWatch logs.
+
+This implementation relies on the current single DCC ECS service task and Gunicorn workers=1 configuration. A DCC task restart drops pending results, and horizontal scaling or adding Gunicorn workers would break process-local result retrieval. Keep the service at one task and one Gunicorn worker until a different ephemeral result transport is approved. Keep DCC_STATELESS_RUN_API_ENABLED=false until the private ingress boundary and Authentication are addressed.

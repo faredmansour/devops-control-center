@@ -7,12 +7,14 @@ from apps.diagnostics.views import (
     StatelessRunCancelView,
     StatelessRunCollectionView,
     StatelessRunDetailView,
+    StatelessRunResultCallbackView,
     StopDiagnosticSessionView,
 )
 
 urlpatterns = [
     path("runs/", StatelessRunCollectionView.as_view(), name="stateless-run-list"),
     path("runs/<uuid:run_id>/", StatelessRunDetailView.as_view(), name="stateless-run-detail"),
+    path("runs/<uuid:run_id>/result/", StatelessRunResultCallbackView.as_view(), name="stateless-run-result"),
     path("runs/<uuid:run_id>/cancel/", StatelessRunCancelView.as_view(), name="stateless-run-cancel"),
     path("", DiagnosticSessionCollectionView.as_view(), name="diagnostic-session-list"),
     path("active/", ActiveDiagnosticSessionView.as_view(), name="active-diagnostic-session"),

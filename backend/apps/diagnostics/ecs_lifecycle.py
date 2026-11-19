@@ -114,6 +114,7 @@ class ECSStatelessJobLifecycle:
         target_task_id: str,
         target_cluster_arn: str | None = None,
         max_duration_seconds: int | None = None,
+        runner_environment: dict[str, str] | None = None,
     ) -> ExecutionReference:
         """Launch a task and register an independent, one-time stop deadline."""
         run_id = self._validate_run_id(run_id)
@@ -122,7 +123,13 @@ class ECSStatelessJobLifecycle:
             raise DiagnosticProviderError(
                 "The requested run duration exceeds the configured maximum."
             )
-        execution = self._provider.start(run_id, target_task_id, target_cluster_arn)
+        if runner_environment:
+            execution = self._provider.start(
+                run_id, target_task_id, target_cluster_arn,
+                extra_environment=runner_environment,
+            )
+        else:
+            execution = self._provider.start(run_id, target_task_id, target_cluster_arn)
         try:
             self._schedule_cleanup(run_id, execution, duration)
         except Exception:
