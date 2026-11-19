@@ -7,6 +7,7 @@ the stateless run API is wired in a later step.
 """
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+import json
 import logging
 import re
 from typing import Any
@@ -153,13 +154,11 @@ class ECSStatelessJobLifecycle:
                         "arn:aws:scheduler:::aws-sdk:ecs:stopTask"
                     ),
                     "RoleArn": self._cleanup_role_arn,
-                    "Input": (
-                        '{"cluster":'
-                        + __import__("json").dumps(execution.cluster)
-                        + ',"task":'
-                        + __import__("json").dumps(execution.reference)
-                        + ',"reason":"DCC diagnostic maximum duration reached"}'
-                    ),
+                    "Input": json.dumps({
+                        "cluster": execution.cluster,
+                        "task": execution.reference,
+                        "reason": "DCC diagnostic maximum duration reached",
+                    }),
                 },
             )
         except (BotoCoreError, ClientError):
