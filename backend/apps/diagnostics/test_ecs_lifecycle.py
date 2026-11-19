@@ -10,6 +10,17 @@ from apps.diagnostics.models import ExecutionReference
 from apps.diagnostics.providers import DiagnosticProviderError
 
 
+@override_settings(
+    AWS_REGION="us-east-1",
+    DCC_ECS_CLUSTER="dcc-cluster",
+    DCC_ECS_TASK_DEFINITION="dcc-diagnostic:1",
+    DCC_ECS_SUBNETS=["subnet-123"],
+    DCC_ECS_SECURITY_GROUPS=["sg-123"],
+    DCC_ECS_CONTAINER_NAME="diagnostic-worker",
+    DCC_ECS_ASSIGN_PUBLIC_IP=False,
+    DCC_ECS_CLEANUP_ROLE_ARN="arn:aws:iam::123456789012:role/dcc-scheduler-stop",
+    DCC_ECS_CLEANUP_SCHEDULE_GROUP="dcc-cleanup",
+)
 class ECSStatelessJobLifecycleTests(TestCase):
     def setUp(self):
         self.execution = ExecutionReference(
