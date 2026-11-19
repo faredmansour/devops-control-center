@@ -108,4 +108,18 @@ The feature is disabled by default with `DCC_STATELESS_RUN_API_ENABLED=false`. E
 
 Only `runtime_health` is accepted by the current run endpoint. Other schema test types remain reserved and are rejected until their execution adapters exist. ECS `STOPPED` is a task lifecycle state, not proof that a test passed. The API currently returns ECS lifecycle information only; normalized test result callbacks and result delivery are a separate implementation step.
 
-The Test Lab Terraform adds a dedicated EventBridge Scheduler group and cleanup role. The DCC task role can create/delete schedules only in that group and pass only the cleanup role; the cleanup role can call `ecs:StopTask` only for tasks in the configured Test Lab cluster. Terraform changes are source-only until a reviewed plan is applied. The current Test Lab does not yet define a dedicated diagnostic runner task definition, so do not enable the API until that task definition, its execution/task roles, networking, and `DCC_ECS_*` settings are configured.
+The Test Lab Terraform now defines a separate one-shot Fargate task definition for the runtime-health runner, a dedicated read-only runner task role, and a DCC control-plane policy scoped to launching only that task definition. The runner inspects only the selected ECS task and writes a minimal operational completion event; it does not put task/container findings into CloudWatch Logs. The DCC task role also manages one-time cleanup schedules in its dedicated Scheduler group. These are source changes only until a reviewed Terraform plan is validated and applied.
+
+
+## 10. Dedicated runtime-health runner (initial implementation)
+
+A separate module, `apps.diagnostics.runner`, is executed as a one-shot ECS Fargate task. It is not the always-on Test Worker and does not accept arbitrary commands, task definitions, or URLs from the browser.
+
+- DCC resolves and validates the selected RUNNING target task before launch.
+- ECS launches the fixed `dcc-diagnostic-runner` task definition in private application subnets using the dedicated diagnostic-worker security group.
+- The runner uses its own task role, limited to `ecs:DescribeTasks` in the configured Test Lab cluster.
+- It classifies the target as `healthy`, `failed`, or `unknown` based on ECS task/container health signals.
+- A one-time EventBridge Scheduler deadline independently stops the runner task.
+- CloudWatch receives only a minimal operational completion event; detailed target/container findings are not written to logs.
+
+**Important limitation:** The runner result is not yet delivered back through the stateless API. The API still exposes ECS task lifecycle state only, and ECS `STOPPED` must not be interpreted as a passed test. A short-lived, signed result callback and transient result retrieval endpoint remain the next implementation step. The API feature flag stays disabled.
