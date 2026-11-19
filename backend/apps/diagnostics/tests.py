@@ -1529,7 +1529,7 @@ class DiagnosticExecutionFailureTests(ECSDiscoveryTestMixin, TestCase):
         self.assertEqual(response_data["execution"]["provider"], "ecs")
 
 
-class StatelessRunAPITests(SimpleTestCase):
+@override_settings(DCC_STATELESS_RUN_API_ENABLED=True, DCC_RUN_CAPABILITY_TTL_SECONDS=600)\nclass StatelessRunAPITests(SimpleTestCase):
     RUN_ID = "123e4567-e89b-42d3-a456-426614174000"
     EXECUTION = ExecutionReference(
         provider="ecs",
@@ -1539,6 +1539,16 @@ class StatelessRunAPITests(SimpleTestCase):
 
     def setUp(self):
         self.client = APIClient()
+        self.discovery_patcher = patch(
+            "apps.diagnostics.contracts.get_ecs_discovery_provider"
+        )
+        self.discovery_factory = self.discovery_patcher.start()
+        self.discovery = Mock()
+        self.discovery.get_running_task.return_value = {
+            "last_status": "RUNNING",
+            "cluster_arn": "arn:aws:ecs:us-east-1:123456789012:cluster/workloads",
+        }
+        self.discovery_factory.return_value = self.discovery
         self.lifecycle = Mock()
         self.lifecycle.start.return_value = self.EXECUTION
         self.lifecycle.status.return_value = Mock(
@@ -1549,7 +1559,6 @@ class StatelessRunAPITests(SimpleTestCase):
             stopped_at=None,
         )
 
-    @override_settings(DCC_RUN_CAPABILITY_TTL_SECONDS=600)
     @patch("apps.diagnostics.views.uuid4")
     @patch("apps.diagnostics.views._lifecycle")
     def test_create_run_returns_short_lived_capability(self, lifecycle_factory, uuid_factory):
@@ -1641,9 +1650,10 @@ class StatelessRunAPITests(SimpleTestCase):
         self.assertEqual(response.status_code, 401)
         self.lifecycle.status.assert_not_called()
 
-    def _create_run(self):
-        from unittest.mock import patch
+    def tearDown(self):
+        self.discovery_patcher.stop()
 
+    def _create_run(self):
         with patch("apps.diagnostics.views.uuid4", return_value=self.RUN_ID):
             with patch("apps.diagnostics.views._lifecycle", return_value=self.lifecycle):
                 return self.client.post(
