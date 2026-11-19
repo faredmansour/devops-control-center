@@ -93,7 +93,7 @@ jobs:
           terraform_wrapper: false
 
       - name: Check Terraform formatting
-        run: terraform fmt -check -recursive
+        run: terraform fmt -diff -recursive
 
       - name: Initialize Terraform without backend
         run: terraform init -backend=false -input=false -lockfile=readonly
