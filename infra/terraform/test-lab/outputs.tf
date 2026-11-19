@@ -176,3 +176,13 @@ output "dcc_alb_url" {
   description = "HTTP URL for the public DCC Application Load Balancer."
   value       = "http://${aws_lb.dcc.dns_name}/"
 }
+
+output "diagnostic_runner_task_definition_arn" {
+  description = "Dedicated one-shot runtime diagnostic runner task definition."
+  value       = aws_ecs_task_definition.diagnostic_runner.arn
+}
+
+output "diagnostic_runner_log_group_name" {
+  description = "Short-retention CloudWatch log group for diagnostic runner output."
+  value       = aws_cloudwatch_log_group.diagnostic_runner.name
+}
