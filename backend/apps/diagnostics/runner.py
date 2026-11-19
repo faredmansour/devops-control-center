@@ -108,13 +108,15 @@ def main() -> int:
         }))
         return 2
 
+    # Do not write customer task/container details or the result payload to
+    # CloudWatch Logs. A short operational event is sufficient for now; result
+    # delivery is implemented separately from ECS task lifecycle.
     logger.info(json.dumps({
-        "event": "diagnostic_run_result",
-        "schema_version": 1,
+        "event": "diagnostic_run_finished",
         "run_id": run_id,
         "test_type": "runtime_health",
-        **result,
-    }, default=str))
+        "result_status": result["status"],
+    }))
 
     return 0 if result["status"] in {"healthy", "unknown"} else 1
 
