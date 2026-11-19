@@ -69,6 +69,12 @@ resource "aws_ecs_task_definition" "dcc_app" {
         { name = "AWS_REGION", value = var.aws_region },
         { name = "AWS_DEFAULT_REGION", value = var.aws_region },
         { name = "DCC_ECS_CLUSTERS", value = aws_ecs_cluster.test_lab.name },
+        { name = "DCC_ECS_CLUSTER", value = aws_ecs_cluster.test_lab.name },
+        { name = "DCC_ECS_TASK_DEFINITION", value = aws_ecs_task_definition.diagnostic_runner.arn },
+        { name = "DCC_ECS_SUBNETS", value = join(",", [for subnet in aws_subnet.private_application : subnet.id]) },
+        { name = "DCC_ECS_SECURITY_GROUPS", value = aws_security_group.diagnostic_worker.id },
+        { name = "DCC_ECS_CONTAINER_NAME", value = "diagnostic-runner" },
+        { name = "DCC_ECS_ASSIGN_PUBLIC_IP", value = "false" },
         { name = "DCC_ECS_CLEANUP_ROLE_ARN", value = aws_iam_role.scheduler_cleanup.arn },
         { name = "DCC_ECS_CLEANUP_SCHEDULE_GROUP", value = aws_scheduler_schedule_group.dcc_cleanup.name },
         { name = "DCC_RUN_CAPABILITY_TTL_SECONDS", value = "1800" },
@@ -138,15 +144,66 @@ resource "aws_ecs_service" "dcc_app" {
   depends_on = [
     aws_lb_listener.dcc_http,
     aws_cloudwatch_log_group.dcc_app,
+    aws_cloudwatch_log_group.diagnostic_runner,
     aws_iam_role_policy.ecs_execution,
     aws_iam_role_policy.dcc_ecs_discovery,
     aws_iam_role_policy.dcc_scheduler_control,
+    aws_iam_role_policy.dcc_run_diagnostic_task,
     aws_iam_role_policy.scheduler_cleanup,
     aws_secretsmanager_secret_version.dcc_django_key,
   ]
 
   tags = {
     Name    = "dcc-app-service"
+    Project = "DCC"
+  }
+}
+
+# The runner is a separate one-shot Fargate task, never a long-running service.
+resource "aws_cloudwatch_log_group" "diagnostic_runner" {
+  name              = "${var.log_group_prefix}/diagnostic-runner"
+  retention_in_days = 7
+
+  tags = {
+    Name    = "dcc-diagnostic-runner"
+    Project = "DCC"
+  }
+}
+
+resource "aws_ecs_task_definition" "diagnostic_runner" {
+  family                   = "dcc-diagnostic-runner"
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc"
+  cpu                      = 256
+  memory                   = 512
+  execution_role_arn       = aws_iam_role.ecs_execution.arn
+  task_role_arn            = aws_iam_role.diagnostic_runner_task.arn
+
+  container_definitions = jsonencode([
+    {
+      name      = "diagnostic-runner"
+      image     = local.dcc_app_image
+      essential = true
+      user      = "10001:10001"
+      command   = ["python", "-m", "apps.diagnostics.runner"]
+      environment = [
+        { name = "AWS_REGION", value = var.aws_region },
+        { name = "AWS_DEFAULT_REGION", value = var.aws_region },
+        { name = "LOG_LEVEL", value = "INFO" },
+      ]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-group         = aws_cloudwatch_log_group.diagnostic_runner.name
+          awslogs-region        = var.aws_region
+          awslogs-stream-prefix = "runner"
+        }
+      }
+    }
+  ])
+
+  tags = {
+    Name    = "dcc-diagnostic-runner"
     Project = "DCC"
   }
 }
