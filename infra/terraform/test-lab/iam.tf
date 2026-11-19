@@ -270,3 +270,71 @@ resource "aws_iam_role_policy" "dcc_scheduler_control" {
   role   = aws_iam_role.diagnostic_task.id
   policy = data.aws_iam_policy_document.dcc_scheduler_control.json
 }
+
+
+# A dedicated runner role can only inspect tasks in the configured Test Lab cluster.
+resource "aws_iam_role" "diagnostic_runner_task" {
+  name               = "${var.name_prefix}-diagnostic-runner-role"
+  assume_role_policy = data.aws_iam_policy_document.ecs_tasks_trust.json
+
+  tags = {
+    Name    = "${var.name_prefix}-diagnostic-runner-role"
+    Project = var.project_name
+  }
+}
+
+data "aws_iam_policy_document" "diagnostic_runner_task" {
+  statement {
+    sid       = "DescribeTasksInTestLab"
+    effect    = "Allow"
+    actions   = ["ecs:DescribeTasks"]
+    resources = [
+      aws_ecs_cluster.test_lab.arn,
+      "arn:${data.aws_partition.current.partition}:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:task/${aws_ecs_cluster.test_lab.name}/*"
+    ]
+  }
+}
+
+resource "aws_iam_role_policy" "diagnostic_runner_task" {
+  name   = "${var.name_prefix}-diagnostic-runner-policy"
+  role   = aws_iam_role.diagnostic_runner_task.id
+  policy = data.aws_iam_policy_document.diagnostic_runner_task.json
+}
+
+# Only the DCC control task may launch the fixed runner task definition.
+data "aws_iam_policy_document" "dcc_run_diagnostic_task" {
+  statement {
+    sid       = "RunFixedDiagnosticRunner"
+    effect    = "Allow"
+    actions   = ["ecs:RunTask"]
+    resources = [aws_ecs_task_definition.diagnostic_runner.arn]
+
+    condition {
+      test     = "ArnEquals"
+      variable = "ecs:cluster"
+      values   = [aws_ecs_cluster.test_lab.arn]
+    }
+  }
+
+  statement {
+    sid       = "PassOnlyRunnerRoles"
+    effect    = "Allow"
+    actions   = ["iam:PassRole"]
+    resources = [
+      aws_iam_role.ecs_execution.arn,
+      aws_iam_role.diagnostic_runner_task.arn,
+    ]
+
+    condition {
+      test     = "StringEquals"
+      variable = "iam:PassedToService"
+      values   = ["ecs-tasks.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role_policy" "dcc_run_diagnostic_task" {
+  name   = "${var.name_prefix}-dcc-run-diagnostic-task-policy"
+  role   = aws_iam_role.diagnostic_task.id
+  policy = data.aws_iam_policy_document.dcc_run_diagnostic_task.json
+}
