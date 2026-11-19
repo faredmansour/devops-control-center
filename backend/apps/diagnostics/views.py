@@ -169,6 +169,7 @@ class StatelessRunDetailView(APIView):
     def get(self, request: Request, run_id: str) -> Response:
         _ensure_stateless_runs_enabled()
         payload = _load_run_capability(request, run_id)
+        run_id = str(run_id)
         try:
             snapshot = _lifecycle().status(run_id, _execution_from_capability(payload))
         except DiagnosticProviderError:
@@ -201,6 +202,7 @@ class StatelessRunCancelView(APIView):
     def post(self, request: Request, run_id: str) -> Response:
         _ensure_stateless_runs_enabled()
         payload = _load_run_capability(request, run_id)
+        run_id = str(run_id)
         try:
             _lifecycle().cancel(run_id, _execution_from_capability(payload))
         except DiagnosticProviderError:
