@@ -21,7 +21,7 @@ from apps.diagnostics.providers import DiagnosticProviderError
     DCC_ECS_CLEANUP_ROLE_ARN="arn:aws:iam::123456789012:role/dcc-scheduler-stop",
     DCC_ECS_CLEANUP_SCHEDULE_GROUP="dcc-cleanup",
 )
-class ECSStatelessJobLifecycleTests(TestCase):
+class ECSStatelessJobLifecycleTests(SimpleTestCase):
     def setUp(self):
         self.execution = ExecutionReference(
             provider="ecs",
