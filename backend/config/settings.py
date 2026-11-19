@@ -84,6 +84,9 @@ DCC_ECS_CLEANUP_ROLE_ARN = os.environ.get("DCC_ECS_CLEANUP_ROLE_ARN", "").strip(
 DCC_ECS_CLEANUP_SCHEDULE_GROUP = os.environ.get(
     "DCC_ECS_CLEANUP_SCHEDULE_GROUP", "default"
 ).strip()
+DCC_RUN_CAPABILITY_TTL_SECONDS = env_int(
+    "DCC_RUN_CAPABILITY_TTL_SECONDS", 1800
+)
 DCC_DIAGNOSTIC_PROVIDER = os.environ.get(
     "DCC_DIAGNOSTIC_PROVIDER", "inmemory"
 ).strip().lower()
