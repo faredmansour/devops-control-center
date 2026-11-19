@@ -1541,7 +1541,7 @@ class StatelessRunAPITests(SimpleTestCase):
     def setUp(self):
         self.client = APIClient()
         self.discovery_patcher = patch(
-            "apps.diagnostics.contracts.get_ecs_discovery_provider"
+            "apps.diagnostics.views.get_ecs_discovery_provider"
         )
         self.discovery_factory = self.discovery_patcher.start()
         self.discovery = Mock()
