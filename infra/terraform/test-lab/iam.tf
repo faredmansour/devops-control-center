@@ -217,9 +217,9 @@ resource "aws_iam_role" "scheduler_cleanup" {
 
 data "aws_iam_policy_document" "scheduler_cleanup" {
   statement {
-    sid       = "StopOnlyDCCDiagnosticTasks"
-    effect    = "Allow"
-    actions   = ["ecs:StopTask"]
+    sid     = "StopOnlyDCCDiagnosticTasks"
+    effect  = "Allow"
+    actions = ["ecs:StopTask"]
     resources = [
       "arn:${data.aws_partition.current.partition}:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:task/${aws_ecs_cluster.test_lab.name}/*"
     ]
@@ -285,9 +285,9 @@ resource "aws_iam_role" "diagnostic_runner_task" {
 
 data "aws_iam_policy_document" "diagnostic_runner_task" {
   statement {
-    sid       = "DescribeTasksInTestLab"
-    effect    = "Allow"
-    actions   = ["ecs:DescribeTasks"]
+    sid     = "DescribeTasksInTestLab"
+    effect  = "Allow"
+    actions = ["ecs:DescribeTasks"]
     resources = [
       aws_ecs_cluster.test_lab.arn,
       "arn:${data.aws_partition.current.partition}:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:task/${aws_ecs_cluster.test_lab.name}/*"
@@ -317,9 +317,9 @@ data "aws_iam_policy_document" "dcc_run_diagnostic_task" {
   }
 
   statement {
-    sid       = "PassOnlyRunnerRoles"
-    effect    = "Allow"
-    actions   = ["iam:PassRole"]
+    sid     = "PassOnlyRunnerRoles"
+    effect  = "Allow"
+    actions = ["iam:PassRole"]
     resources = [
       aws_iam_role.ecs_execution.arn,
       aws_iam_role.diagnostic_runner_task.arn,
