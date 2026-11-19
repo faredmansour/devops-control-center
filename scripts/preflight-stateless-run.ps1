@@ -69,7 +69,7 @@ Assert-Condition ($environment["DCC_STATELESS_RUN_API_ENABLED"] -eq "false") "St
 Assert-Condition ($environment["DCC_ECS_ASSIGN_PUBLIC_IP"] -eq "false") "Diagnostic runner is configured without a public IP."
 Assert-Condition ($environment["DCC_RESULT_CALLBACK_BASE_URL"] -eq "http://dcc-app.dcc-test.internal:8000") "DCC callback base URL uses the private Cloud Map name."
 
-$dccSecurityGroup = @($task.securityGroups)[0]
+$dccSecurityGroup = @($eni.Groups | ForEach-Object { $_.GroupId })[0]
 $runnerSecurityGroup = $environment["DCC_ECS_SECURITY_GROUPS"]
 Assert-Condition (-not [string]::IsNullOrWhiteSpace($dccSecurityGroup) -and -not [string]::IsNullOrWhiteSpace($runnerSecurityGroup)) "DCC and diagnostic-runner security groups are configured."
 
