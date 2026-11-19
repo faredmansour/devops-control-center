@@ -93,3 +93,19 @@ A no-database MVP can avoid saving customer connection profiles and project hist
 | Customer resource inventory | Not retained after the run |
 
 The one-day artifact TTL is a proposed default, not a promise of zero retention. If strict zero-retention is selected, remove temporary object storage and use direct result delivery only.
+
+## 9. Implemented stateless ECS run API (initial slice)
+
+The initial API slice is exposed under `/api/diagnostic-sessions/runs/`:
+
+- `POST /api/diagnostic-sessions/runs/` validates the versioned request, resolves the target task through live ECS discovery, requires the target to be RUNNING, launches the configured ECS diagnostic task, and returns a server-generated UUID plus a signed short-lived capability token.
+- `GET /api/diagnostic-sessions/runs/{run_id}/` requires the token in `X-DCC-Run-Token` and derives current state from ECS `DescribeTasks`.
+- `POST /api/diagnostic-sessions/runs/{run_id}/cancel/` requires the same capability and stops the exact ECS task referenced by the signed payload.
+
+The token is signed with Django's `SECRET_KEY`, bound to the run ID and ECS execution reference, and expires according to `DCC_RUN_CAPABILITY_TTL_SECONDS` (default 1800 seconds). The browser must keep it only for the active run and must not log it or put it in a URL. A Django restart does not invalidate the token while the signing key remains unchanged, and no run registry is stored in process memory.
+
+The feature is disabled by default with `DCC_STATELESS_RUN_API_ENABLED=false`. Enable it only behind a private, controlled ingress until proper OIDC authentication and tenant authorization are implemented. The capability token protects follow-up status/cancel calls; it does not authenticate or rate-limit the initial create request. CORS is not an access-control boundary.
+
+Only `runtime_health` is accepted by the current run endpoint. Other schema test types remain reserved and are rejected until their execution adapters exist. ECS `STOPPED` is a task lifecycle state, not proof that a test passed. The API currently returns ECS lifecycle information only; normalized test result callbacks and result delivery are a separate implementation step.
+
+The Test Lab Terraform adds a dedicated EventBridge Scheduler group and cleanup role. The DCC task role can create/delete schedules only in that group and pass only the cleanup role; the cleanup role can call `ecs:StopTask` only for tasks in the configured Test Lab cluster. Terraform changes are source-only until a reviewed plan is applied. The current Test Lab does not yet define a dedicated diagnostic runner task definition, so do not enable the API until that task definition, its execution/task roles, networking, and `DCC_ECS_*` settings are configured.
