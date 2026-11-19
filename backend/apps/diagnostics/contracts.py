@@ -5,6 +5,8 @@ that every catalog entry already has an execution adapter.
 """
 from rest_framework import serializers
 
+from apps.api.ecs_discovery import ECSDiscoveryError, get_ecs_discovery_provider
+
 
 RUN_SCHEMA_VERSION = 1
 RUN_TYPES = (
@@ -51,6 +53,20 @@ class DiagnosticRunRequestSerializer(StrictSerializer):
         max_length=128,
     )
     limits = DiagnosticRunLimitsSerializer()
+
+    def validate_target_task_id(self, value):
+        try:
+            task = get_ecs_discovery_provider().get_running_task(value)
+        except ECSDiscoveryError:
+            raise serializers.ValidationError(
+                "AWS ECS target discovery is unavailable."
+            ) from None
+        if task is None:
+            raise serializers.ValidationError("The target ECS task was not found.")
+        if task.get("last_status") != "RUNNING":
+            raise serializers.ValidationError("The target ECS task is not running.")
+        self.context["target_cluster_arn"] = task["cluster_arn"]
+        return value
 
     def validate_schema_version(self, value):
         if value != RUN_SCHEMA_VERSION:
