@@ -79,10 +79,10 @@ output "cloud_map_test_api_service_id" {
 output "iam_role_arns" {
   description = "Foundation IAM role ARNs; no application or DCC administrative permissions are attached to task roles."
   value = {
-    execution        = aws_iam_role.ecs_execution.arn
-    test_api_task    = aws_iam_role.test_api_task.arn
-    test_worker_task = aws_iam_role.test_worker_task.arn
-    diagnostic_task  = aws_iam_role.diagnostic_task.arn
+    execution         = aws_iam_role.ecs_execution.arn
+    test_api_task     = aws_iam_role.test_api_task.arn
+    test_worker_task  = aws_iam_role.test_worker_task.arn
+    diagnostic_task   = aws_iam_role.diagnostic_task.arn
     scheduler_cleanup = aws_iam_role.scheduler_cleanup.arn
   }
 }
