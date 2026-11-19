@@ -128,6 +128,8 @@ The provider requests only configured clusters and currently running tasks. Scop
 
 When `DCC_DIAGNOSTIC_PROVIDER=ecs`, add only the required `ecs:RunTask`, `ecs:StopTask`, and narrowly scoped `iam:PassRole` permissions for the configured worker task definition and roles. The DCC application and diagnostic worker may need distinct task roles. Keep metrics and log permissions restricted to configured resources.
 
+For the stateless ECS job lifecycle, the DCC application task role also needs narrowly scoped `scheduler:CreateSchedule` and `scheduler:DeleteSchedule` permissions for the configured EventBridge Scheduler group, plus `iam:PassRole` for the dedicated cleanup role only. Set `DCC_ECS_CLEANUP_ROLE_ARN` to that role ARN and optionally `DCC_ECS_CLEANUP_SCHEDULE_GROUP` (default: `default`). The cleanup role trust policy must allow `scheduler.amazonaws.com` to assume it, and its permissions must allow `ecs:StopTask` only against the configured diagnostic cluster/tasks. Do not reuse the broad ECS task execution role. The one-time schedule targets the AWS SDK ECS `StopTask` action and uses `ActionAfterCompletion=DELETE`; verify the Scheduler role, trust relationship, and target permissions in a non-production account before enabling this provider.
+
 Do not grant broad `iam:*`, `ec2:*`, or unrelated mutation permissions.
 
 ## Security group and networking
