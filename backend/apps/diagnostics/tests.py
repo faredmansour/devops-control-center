@@ -1622,7 +1622,7 @@ class StatelessRunAPITests(SimpleTestCase):
         response = self.client.get(
             f"/api/diagnostic-sessions/runs/{self.RUN_ID}/"
         )
-        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.status_code, 403)
 
     @patch("apps.diagnostics.views._lifecycle")
     def test_status_rejects_capability_for_another_run(self, lifecycle_factory):
@@ -1635,7 +1635,7 @@ class StatelessRunAPITests(SimpleTestCase):
             HTTP_X_DCC_RUN_TOKEN=token,
         )
 
-        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.status_code, 403)
         self.lifecycle.status.assert_not_called()
 
     @patch("apps.diagnostics.views._lifecycle")
@@ -1648,7 +1648,7 @@ class StatelessRunAPITests(SimpleTestCase):
                 HTTP_X_DCC_RUN_TOKEN=token,
             )
 
-        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.status_code, 403)
         self.lifecycle.status.assert_not_called()
 
     def tearDown(self):
