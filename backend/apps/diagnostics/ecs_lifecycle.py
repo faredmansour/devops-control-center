@@ -113,12 +113,18 @@ class ECSStatelessJobLifecycle:
         run_id: str,
         target_task_id: str,
         target_cluster_arn: str | None = None,
+        max_duration_seconds: int | None = None,
     ) -> ExecutionReference:
         """Launch a task and register an independent, one-time stop deadline."""
         run_id = self._validate_run_id(run_id)
+        duration = max_duration_seconds or self._max_duration
+        if not 1 <= duration <= self._max_duration:
+            raise DiagnosticProviderError(
+                "The requested run duration exceeds the configured maximum."
+            )
         execution = self._provider.start(run_id, target_task_id, target_cluster_arn)
         try:
-            self._schedule_cleanup(run_id, execution)
+            self._schedule_cleanup(run_id, execution, duration)
         except Exception:
             # Never leave a task running when its independent cleanup timer failed.
             try:
@@ -133,11 +139,16 @@ class ECSStatelessJobLifecycle:
             raise
         return execution
 
-    def _schedule_cleanup(self, run_id: str, execution: ExecutionReference) -> None:
+    def _schedule_cleanup(
+        self,
+        run_id: str,
+        execution: ExecutionReference,
+        duration_seconds: int,
+    ) -> None:
         if execution.provider != "ecs" or not execution.cluster:
             raise DiagnosticProviderError("The ECS execution reference is invalid.")
 
-        deadline = self._clock() + timedelta(seconds=self._max_duration)
+        deadline = self._clock() + timedelta(seconds=duration_seconds)
         schedule_expression = deadline.astimezone(timezone.utc).strftime(
             "at(%Y-%m-%dT%H:%M:%S)"
         )
