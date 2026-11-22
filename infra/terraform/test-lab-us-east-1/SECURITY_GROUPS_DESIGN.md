@@ -30,8 +30,8 @@ The module creates seven groups: `alb`, `dcc_control`, `diagnostic_worker`, `tes
 ## Default-deny and optional public egress
 
 - `operator_ingress_cidrs` defaults to an empty list. Until approved CIDRs are supplied, the ALB has no inbound rule.
-- Public HTTPS egress for DCC Control, Diagnostic Worker, Test API, and Test Worker is independently opt-in and defaults to `false`.
-- Diagnostic public HTTP/HTTPS probing is separately opt-in and defaults to `false`.
+- Public HTTPS egress for DCC Control, Diagnostic Worker, Test API, and Test Worker is controlled by explicit destination CIDR allowlists, all empty by default.
+- Diagnostic public HTTP/HTTPS probing uses a separate explicit destination CIDR allowlist, also empty by default.
 - Database and Cache have no public ingress and no explicit public egress rules.
 - No SSH/RDP ingress is created.
 - ALB HTTP/80 is not exposed. If required, add it only with a separately implemented and reviewed HTTP-to-HTTPS redirect listener.
