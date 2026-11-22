@@ -19,7 +19,7 @@ resource "aws_ecs_cluster" "this" {
     name  = "containerInsights"
     value = "disabled"
   }
-  tags       = var.tags
+  tags = var.tags
 }
 
 resource "aws_lb" "this" {
@@ -292,5 +292,5 @@ resource "aws_ecs_service" "ecommerce_backend" {
     container_port   = 8000
   }
   depends_on = [aws_lb_listener_rule.ecommerce_api]
-  tags = var.tags
+  tags       = var.tags
 }
