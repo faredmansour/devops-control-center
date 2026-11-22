@@ -1,0 +1,80 @@
+variable "aws_region" {
+  description = "AWS region dedicated to this independent Test Lab."
+  type        = string
+  default     = "us-east-1"
+}
+
+variable "project_name" {
+  description = "Project tag value applied to managed resources."
+  type        = string
+  default     = "DCC-TestLab"
+}
+
+variable "environment_name" {
+  description = "Environment tag value."
+  type        = string
+  default     = "lab"
+}
+
+variable "name_prefix" {
+  description = "Unique resource naming prefix for the us-east-1 environment."
+  type        = string
+  default     = "dcc-testlab-use1"
+
+  validation {
+    condition     = length(var.name_prefix) >= 3 && length(var.name_prefix) <= 32
+    error_message = "name_prefix must be between 3 and 32 characters."
+  }
+}
+
+variable "vpc_cidr" {
+  description = "Dedicated VPC CIDR; verify it against all connected networks before apply."
+  type        = string
+  default     = "10.81.0.0/16"
+
+  validation {
+    condition     = can(cidrnetmask(var.vpc_cidr))
+    error_message = "vpc_cidr must be a valid IPv4 CIDR."
+  }
+}
+
+variable "availability_zones" {
+  description = "Exactly two AZ names, or empty to select the first two available in us-east-1."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = length(var.availability_zones) == 0 || (length(var.availability_zones) == 2 && length(distinct(var.availability_zones)) == 2)
+    error_message = "availability_zones must be empty or contain exactly two distinct AZ names."
+  }
+}
+
+variable "public_subnet_cidrs" {
+  description = "Public subnet CIDRs ordered by AZ."
+  type        = list(string)
+  default     = ["10.81.0.0/24", "10.81.1.0/24"]
+}
+
+variable "private_application_subnet_cidrs" {
+  description = "Private application subnet CIDRs ordered by AZ."
+  type        = list(string)
+  default     = ["10.81.16.0/20", "10.81.32.0/20"]
+}
+
+variable "private_data_subnet_cidrs" {
+  description = "Private data subnet CIDRs ordered by AZ."
+  type        = list(string)
+  default     = ["10.81.48.0/24", "10.81.49.0/24"]
+}
+
+variable "enable_nat_gateway" {
+  description = "Create one NAT Gateway for private application egress; incurs recurring cost."
+  type        = bool
+  default     = true
+}
+
+variable "common_tags" {
+  description = "Additional non-sensitive tags applied to all resources."
+  type        = map(string)
+  default     = {}
+}
