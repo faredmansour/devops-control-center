@@ -17,4 +17,7 @@ variable "ecommerce_frontend_image" { type = string }
 variable "ecommerce_backend_image" { type = string }
 variable "mongodb_atlas_secret_arn" { type = string }
 variable "jwt_secret_arn" { type = string }
-variable "tags" { type = map(string) default = {} }
+variable "tags" {
+  type    = map(string)
+  default = {}
+}
