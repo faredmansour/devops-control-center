@@ -114,3 +114,27 @@ variable "diagnostic_public_http_egress_cidrs" {
   type        = list(string)
   default     = []
 }
+
+variable "iam_ecr_repository_arns" {
+  description = "ECR repository ARNs allowed for each workload execution role."
+  type        = map(list(string))
+  default     = {}
+}
+
+variable "iam_log_group_arns" {
+  description = "CloudWatch log group ARNs allowed for each workload execution role."
+  type        = map(list(string))
+  default     = {}
+}
+
+variable "iam_secret_arns" {
+  description = "Secrets Manager secret ARNs injected into each workload by ECS."
+  type        = map(list(string))
+  default     = {}
+}
+
+variable "iam_kms_key_arns" {
+  description = "Customer-managed KMS key ARNs used to decrypt each workload secret."
+  type        = map(list(string))
+  default     = {}
+}
