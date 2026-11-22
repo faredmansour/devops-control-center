@@ -248,7 +248,7 @@ resource "aws_ecs_service" "dcc" {
     container_port   = 8000
   }
   depends_on = [aws_lb_listener.dcc]
-  tags = var.tags
+  tags       = var.tags
 }
 
 resource "aws_ecs_service" "ecommerce_frontend" {
@@ -270,7 +270,7 @@ resource "aws_ecs_service" "ecommerce_frontend" {
     container_port   = 80
   }
   depends_on = [aws_lb_listener.ecommerce]
-  tags = var.tags
+  tags       = var.tags
 }
 
 resource "aws_ecs_service" "ecommerce_backend" {
