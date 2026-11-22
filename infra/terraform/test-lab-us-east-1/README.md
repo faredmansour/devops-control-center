@@ -1,6 +1,6 @@
 # DCC Test Lab — us-east-1
 
-**Status:** Network, Security Groups, IAM, ECR, and Secrets Manager Terraform modules are composed in this independent root. Review and CI validation are required; no AWS resources have been deployed.
+**Status:** Network, Security Groups, IAM, ECR, Secrets Manager, ECS Fargate, and one shared HTTP ALB are composed in this independent root. Review and CI validation are required; no AWS resources have been deployed.
 
 ## Purpose and isolation
 
@@ -49,7 +49,7 @@ The reusable Network module currently defines:
 - Subnet CIDR containment and overlap preconditions.
 - Two-AZ selection and availability checks.
 
-The root composes Network, Security Groups, IAM, and ECR modules and exposes non-secret network, workload role, and repository outputs. ECR defines four private repositories (DCC, E-commerce, Agent, Test Worker), enables scan-on-push and immutable tags, encrypts images with AES-256, and retains the ten most recent images. Each IAM execution role receives pull access only to its corresponding repository ARN. Secrets Manager creates metadata for the E-commerce MongoDB Atlas URI; the actual URI is deliberately not managed by Terraform. The E-commerce execution role receives read access only to that secret ARN.
+The root composes Network, Security Groups, IAM, ECR, Secrets Manager, and ECS modules. One public ALB serves E-commerce on port 80 (frontend by default, API/health/uploads to backend) and DCC on port 8080. Three independent Fargate services run DCC, E-commerce frontend, and E-commerce backend in private application subnets. CloudWatch log groups retain seven days. The ALB is closed by default until `alb_ingress_cidrs` is configured. The root exposes non-secret network, workload role, repository, cluster, service, and ALB outputs. ECR defines four private repositories (DCC, E-commerce, Agent, Test Worker), enables scan-on-push and immutable tags, encrypts images with AES-256, and retains the ten most recent images. Each IAM execution role receives pull access only to its corresponding repository ARN. Secrets Manager creates metadata for the E-commerce MongoDB Atlas URI; the actual URI is deliberately not managed by Terraform. The E-commerce execution role receives read access only to that secret ARN.
 
 ## How to read the code
 
