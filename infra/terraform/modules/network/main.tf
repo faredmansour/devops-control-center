@@ -64,26 +64,25 @@ locals {
   ]))
 }
 
-check "two_available_availability_zones" {
-  assert {
-    condition     = length(local.selected_availability_zones) == 2
-    error_message = "The network module requires exactly two available Availability Zones."
-  }
-}
-
-check "configured_availability_zones_are_available" {
-  assert {
-    condition     = alltrue([for az in local.selected_availability_zones : contains(data.aws_availability_zones.available.names, az)])
-    error_message = "Every configured Availability Zone must be available in the selected AWS region."
-  }
-}
-
 resource "aws_vpc" "this" {
   cidr_block           = var.vpc_cidr
   enable_dns_support   = true
   enable_dns_hostnames = true
 
   lifecycle {
+    precondition {
+      condition     = length(local.selected_availability_zones) == 2
+      error_message = "The network module requires exactly two available Availability Zones in the selected AWS region."
+    }
+
+    precondition {
+      condition = alltrue([
+        for az in local.selected_availability_zones :
+        contains(data.aws_availability_zones.available.names, az)
+      ])
+      error_message = "Every configured Availability Zone must be available in the selected AWS region."
+    }
+
     precondition {
       condition     = local.subnet_cidrs_within_vpc
       error_message = "Every public, private-application, and private-data subnet CIDR must fit inside vpc_cidr."
