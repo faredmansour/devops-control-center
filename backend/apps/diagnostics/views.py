@@ -170,6 +170,11 @@ class StatelessRunCollectionView(APIView):
         )
         run_id = str(uuid4())
 
+        if data["test_type"] == "ecs_discovery" and not settings.DCC_ECS_CLUSTERS:
+            raise ValidationError({
+                "detail": "No ECS discovery clusters are configured for this DCC environment."
+            })
+
         callback_base_url = settings.DCC_RESULT_CALLBACK_BASE_URL.rstrip("/")
         if not callback_base_url:
             raise ValidationError({"detail": "The private result callback URL is not configured."})
@@ -185,6 +190,11 @@ class StatelessRunCollectionView(APIView):
                     "DCC_AGENT_MODE": (
                         "discover_ecs" if data["test_type"] == "ecs_discovery"
                         else "runtime_health"
+                    ),
+                    **(
+                        {"DCC_DISCOVERY_CLUSTERS": ",".join(settings.DCC_ECS_CLUSTERS)}
+                        if data["test_type"] == "ecs_discovery"
+                        else {}
                     ),
                     "DCC_RESULT_CALLBACK_URL": callback_url,
                     "DCC_RESULT_CALLBACK_TOKEN": callback_token,
