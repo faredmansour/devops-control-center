@@ -1,117 +1,140 @@
 # Terraform Architecture and Learning Guide — us-east-1 Test Lab
 
-**Status:** Architecture baseline for implementation. This document describes the intended organization; it does not claim that the modules have already been implemented.
+**Status:** Architecture baseline for implementation. This document describes the intended organization; it does not claim that all modules, workloads, or AWS resources have been implemented or deployed.
 
 ## 1. Design goals
 
-1. **Easy to navigate:** one clear responsibility per module and file.
-2. **Easy to explain:** every module has a purpose, inputs, outputs, and explicit dependencies.
-3. **Safe isolation:** a separate Terraform root, backend key, naming prefix, and state from the existing `eu-north-1` Test Lab.
-4. **Reusable:** modules accept inputs rather than hard-coding region-specific resource IDs.
-5. **Reviewable:** changes are validated in small stages, with plans reviewed before any apply.
-6. **Least privilege:** SG rules use SG references for internal traffic; IAM policies scope resources and actions.
-7. **No hidden coupling:** module outputs are passed explicitly; modules do not reach into each other's internal resources.
+1. **Easy to navigate and explain:** one clear responsibility per module and file.
+2. **Safe isolation:** a separate Terraform root, backend key, naming prefix, and state from the existing `eu-north-1` Test Lab.
+3. **Reusable:** modules accept inputs rather than hard-coding region-specific resource IDs.
+4. **Reviewable:** changes are validated in small stages, with plans reviewed before any apply.
+5. **Least privilege:** SG rules use SG references for internal traffic; IAM policies scope resources and actions.
+6. **No hidden coupling:** module outputs are passed explicitly; modules do not reach into each other's internal resources.
+7. **Real target validation:** this lab must deploy both DCC and a separate E-commerce application so DCC can execute meaningful tests against a real target.
 
-## 2. Target directory layout
+## 2. Test Lab scope: two independent applications
 
-The new regional root should evolve toward this structure:
+The us-east-1 lab is not a DCC-only deployment. It contains two distinct application boundaries:
+
+### A. DCC Control Plane
+
+DCC provides the user-facing control plane: project/environment registration, test authorization and orchestration, execution tracking, and result presentation. It must not be treated as the application under test in the E-commerce validation scenario.
+
+### B. E-commerce Target Application
+
+E-commerce is a separately deployed application and the primary target used to validate DCC's capabilities. Its frontend, backend/API, and PostgreSQL data store belong to the E-commerce workload boundary. The database is dedicated to E-commerce and is not shared with DCC.
+
+The exact E-commerce repository, runtime topology, container ports, persistence requirements, and deployment method must be confirmed from its source and deployment configuration before creating ECS services, ALB listeners, or database resources. Do not infer these details from the generic Test API SG.
+
+### C. Reusable DCC Integration Kit / Agent
+
+The long-term product goal is a small reusable DCC integration image/component that can be attached to or deployed alongside future projects. It is an integration/communication component, not the E-commerce application itself and not a permanent dependency required for the target application to stay online.
+
+Its communication model should be secure and narrowly scoped. Prefer outbound-initiated authenticated communication where practical; do not expose an agent management port publicly. The agent's exact runtime placement (standalone task/service, job-side integration, or another adapter) remains a design decision to validate against the execution lifecycle.
+
+### D. On-demand Test Workers
+
+Temporary workers execute explicitly authorized API, load, security, performance, or infrastructure checks. Their lifecycle is independent of Django process memory and must support bounded execution, cancellation, timeout, result delivery, and cleanup. Active tests must be scoped to the registered E-commerce target and governed by rate, duration, and impact limits.
+
+## 3. Workload boundaries and data ownership
+
+| Workload | Responsibility | Owns | Must not own |
+|---|---|---|---|
+| DCC Control Plane | Orchestration and user interface/API | DCC application runtime and its required configuration | E-commerce database or E-commerce lifecycle |
+| E-commerce Frontend | Customer-facing web UI | Frontend runtime/assets | DCC credentials or database access |
+| E-commerce Backend | E-commerce API/business logic | Backend runtime and application configuration | DCC control-plane permissions |
+| E-commerce PostgreSQL | E-commerce persistence | Dedicated database and credentials | DCC application data |
+| DCC Agent / Integration Kit | Secure target-side integration | Minimal integration configuration/identity | Broad AWS administrator permissions |
+| Test Workers | Temporary test execution | Ephemeral execution state and bounded test artifacts | Permanent target credentials or unrestricted target access |
+
+DCC and E-commerce must use separate workload identities, security boundaries, secrets, and resource naming. Do not share a database, task role, or application security group between them. The DCC Control Plane being unavailable must not automatically stop the E-commerce application.
+
+## 4. Target directory layout
+
+The regional root should evolve toward this structure:
 
 ```text
 infra/terraform/
 ├── modules/
 │   ├── network/
-│   │   ├── main.tf          # VPC, subnets, IGW, NAT and route tables
-│   │   ├── variables.tf     # CIDRs, AZs, naming, NAT switch
-│   │   ├── outputs.tf      # VPC and subnet IDs
-│   │   └── README.md       # purpose, traffic flow, examples
 │   ├── security-groups/
-│   │   ├── main.tf          # SG resources and explicit rule resources
-│   │   ├── variables.tf     # VPC ID, ports, approved ingress CIDRs
-│   │   ├── outputs.tf      # SG IDs
-│   │   └── README.md
-│   └── iam/
-│       ├── main.tf          # ECS trust roles and scoped policies
-│       ├── variables.tf     # naming, ARNs, cluster scope, policy inputs
-│       ├── outputs.tf      # role ARNs
-│       └── README.md
+│   ├── iam/
+│   ├── ecr/                 # when image repositories are designed
+│   ├── ecs/                 # reusable ECS task/service resources
+│   ├── load-balancer/       # listeners, target groups and TLS
+│   ├── data-services/       # dedicated E-commerce DB/cache if selected
+│   └── diagnostic-runner/   # temporary DCC test execution
 └── test-lab-us-east-1/
-    ├── versions.tf          # Terraform/provider constraints
-    ├── providers.tf         # AWS provider and regional data sources
-    ├── backend-template/    # inactive, credential-free backend template
-    ├── main.tf              # module composition only
-    ├── variables.tf         # environment-level inputs
-    ├── locals.tf            # common names and tags
-    ├── outputs.tf           # selected environment outputs
+    ├── versions.tf
+    ├── providers.tf
+    ├── backend-template/
+    ├── main.tf              # composition only
+    ├── variables.tf
+    ├── locals.tf
+    ├── outputs.tf
     ├── terraform.tfvars.example
     ├── README.md
+    ├── TERRAFORM_ARCHITECTURE.md
     └── SECURITY_GROUPS_DESIGN.md
 ```
 
-As implementation grows, add separate modules for `ecr`, `data-services`, `service-discovery`, `ecs`, `load-balancer`, and `diagnostic-runner`. Do not create empty module directories just to make the tree look complete; add each module when its resources and tests are ready.
+Do not create empty module directories just to make the tree look complete. Add each module when its resources and tests are ready.
 
-## 3. Responsibility boundaries
+## 5. Responsibility boundaries
 
 | Module | Owns | Must not own |
 |---|---|---|
 | network | VPC, subnets, IGW, NAT, route tables | SG policy, ECS, databases |
 | security-groups | SGs and ingress/egress rules | VPC/subnets, application resources |
 | iam | trust policies, task/execution roles, scoped policies | ECS service lifecycle, network |
-| ecr (later) | repositories, lifecycle and immutability | image build/push credentials |
-| data-services (later) | RDS/ElastiCache and subnet groups | application schema/migrations |
-| ecs (later) | cluster, task definitions, services | VPC creation, IAM policy authoring |
-| load-balancer (later) | ALB, listeners, target groups, ACM attachment | application authentication |
+| ecr | repositories, lifecycle and immutability | image build/push credentials |
+| ecs | clusters, task definitions, services | VPC creation, IAM policy authoring |
+| load-balancer | ALB, listeners, target groups, ACM attachment | application authentication |
+| data-services | E-commerce RDS/ElastiCache and subnet groups, if selected | application schema/migrations |
+| diagnostic-runner | temporary test task definitions and execution configuration | permanent application lifecycle |
 | root | composition, environment values, outputs | detailed resource implementation |
 
-## 4. Dependency flow
+## 6. IAM workload identity design (planning)
 
-```text
-Environment inputs (region, CIDRs, prefix, tags)
-                  |
-                  v
-              Network
-                  |
-             VPC + subnets
-                  |
-        +---------+----------+
-        |                    |
-        v                    v
-  Security Groups           IAM
-        |                    |
-        +---------+----------+
-                  |
-          Later service modules
-      (ECR, data, ECS, ALB, runner)
-```
+IAM roles must be designed per workload, not shared across the entire lab:
 
-The root module wires outputs to inputs. For example, the network module exports `vpc_id` and subnet IDs; the security-groups module consumes `vpc_id`; ECS later consumes private subnet IDs, SG IDs, and IAM role ARNs.
+| Identity | Intended permissions | Explicit exclusions |
+|---|---|---|
+| DCC ECS execution role | Pull DCC image from its ECR repository; write container logs; retrieve only explicitly referenced runtime secrets if required | No E-commerce DB access; no broad discovery permissions |
+| DCC task role | Only the AWS APIs required by implemented DCC control-plane features | No blanket administrator or wildcard resource mutation |
+| E-commerce execution role | Pull E-commerce images; write its container logs; retrieve only its own runtime secrets if required | No DCC control-plane permissions |
+| E-commerce backend task role | Only application-specific AWS integrations confirmed from source code | No DCC discovery/test permissions |
+| DCC Agent role/identity | Authenticate to DCC and perform only its approved integration actions; AWS permissions only if a concrete feature requires them | No broad account discovery or administrative access by default |
+| Test Worker role | Read-only discovery/test permissions scoped to approved resources and the test session | No application deployment, IAM mutation, or unrestricted infrastructure changes |
 
-## 5. File conventions
+The final policies depend on source-code review and the selected execution model. Use separate task roles even when two containers happen to run in one ECS task. Prefer short-lived credentials, scoped resource ARNs, and explicit trust relationships. Do not create the IAM module until the required API actions, resource scopes, and trust principals have been documented and reviewed.
 
-- `main.tf`: resources and data sources for that responsibility only.
-- `variables.tf`: typed inputs, descriptions, validations, safe defaults only.
-- `outputs.tf`: values needed by other modules or operators; never output secrets.
-- `locals.tf`: derived names/tags/expressions; avoid hiding important business decisions.
-- `versions.tf`: Terraform and provider constraints at the root; child modules should not independently pin provider versions unless required.
-- `README.md`: purpose, architecture, inputs, outputs, example, security notes, and cost implications.
+## 7. Network and security boundaries
 
-Naming:
-- Terraform labels: descriptive snake_case (e.g. `private_application`).
-- AWS Name tags: `<name_prefix>-<purpose>`.
-- Resource prefixes for this region: `dcc-testlab-use1`.
-- Avoid unexplained abbreviations and avoid embedding region-specific values inside reusable modules.
-
-## 6. Security-group policy rules
-
+- Keep the regional VPC isolated from the existing `eu-north-1` lab and verify CIDR overlap against connected networks before apply.
+- Keep application workloads private where the selected ingress architecture allows it.
+- Do not assume DCC and E-commerce should share one public ALB. Decide whether they need separate ALBs, listeners, host-based routing, or a private target path after reviewing domains, authentication, and exposure requirements.
+- Keep E-commerce frontend, backend, and database access paths explicit. A frontend must not receive database credentials.
+- E-commerce PostgreSQL is dedicated to E-commerce and accepts connections only from the E-commerce backend (and explicitly approved migration/maintenance path).
+- DCC-to-target test traffic must be limited to the required E-commerce API/health endpoints and approved test-worker sources.
+- Prefer an authenticated outbound agent/control channel where possible; do not create public inbound access to the agent.
+- Test Workers must be temporary, isolated, bounded, and unable to reach unrelated workloads.
 - No public ingress on application, worker, database, cache, or diagnostic task SGs.
-- ALB HTTPS ingress must be restricted to approved operator/VPN CIDRs until application authentication is implemented.
-- HTTP/80, if retained, is redirect-only to HTTPS.
 - Internal access uses source SG references, not broad VPC CIDRs.
-- PostgreSQL 5432 and Redis 6379 are allowed only from their intended workload SGs.
 - Every outbound rule needs a written reason. Prefer VPC endpoints for AWS services where practical; security groups cannot enforce DNS/FQDN destination allowlists.
-- Do not mix inline SG ingress/egress blocks with standalone `aws_vpc_security_group_*_rule` resources for the same SG.
-- Verify the effective planned rules; an omitted egress block does not by itself prove deny-all egress.
+- Do not mix inline SG rules with standalone `aws_vpc_security_group_*_rule` resources for the same SG.
 
-## 7. State and regional isolation
+## 8. Current Security Groups interpretation
+
+The currently implemented seven groups (`alb`, `dcc_control`, `diagnostic_worker`, `test_api`, `test_worker`, `database`, `cache`) are an initial generic policy layer, not yet a complete proof of the final two-application topology.
+
+In particular:
+- `test_api` and `test_worker` are generic application-under-test tiers. Their final names and ownership must be aligned with the E-commerce workload once its deployment design is confirmed.
+- The current `database` and `cache` groups describe generic test-target data services; do not assume they are ready to represent the dedicated E-commerce PostgreSQL boundary without reviewing the module rules.
+- The current ALB-to-DCC path does not establish how E-commerce is exposed to users or how DCC test traffic reaches it.
+- Separate E-commerce frontend/backend/database groups and possibly a separate ALB may be required. Do not add or apply these rules until ports, ingress, and routing are confirmed from the E-commerce deployment design.
+
+## 9. State and regional isolation
 
 - The new root uses a unique backend key, for example `dcc/test-lab/us-east-1/terraform.tfstate`.
 - The backend bucket must be approved and provisioned separately with versioning, encryption, public-access blocking, TLS enforcement, and least-privilege access.
@@ -119,29 +142,36 @@ Naming:
 - Do not reuse resource IDs, endpoints, subnet IDs, SG IDs, Cloud Map IDs, or region-scoped ECR repository URLs from `eu-north-1`.
 - Push immutable images to the new region and reference their digests.
 
-## 8. Implementation and review sequence
+## 10. Cost and operational considerations
+
+- One NAT Gateway is cheaper than one per AZ but creates an AZ dependency and possible cross-AZ data charges. It also incurs hourly and data-processing charges while provisioned.
+- ECS Fargate, ALB, NAT, and managed PostgreSQL each have independent recurring costs. A managed database should be selected only after the E-commerce persistence and budget requirements are reviewed.
+- A containerized database may reduce initial lab cost but introduces persistence, backup, recovery, and operational responsibilities. It must not be treated as disposable if E-commerce data needs to survive deployments.
+- Load and security testing can create target, worker, data-transfer, and logging costs. Set hard test limits and clean up temporary workers.
+
+## 11. Implementation and review sequence
 
 | Stage | Deliverable | Validation gate |
 |---|---|---|
-| 0 | Directory/design baseline | Review module boundaries and naming |
+| 0 | Two-application architecture baseline | Review DCC/E-commerce/Agent/Worker boundaries |
 | 1 | Network module | fmt, validate, CIDR positive/negative checks |
-| 2 | Security Groups module | fmt, validate, mocked policy tests, ingress/egress matrix review |
-| 3 | IAM module | trust-policy and least-privilege review |
-| 4 | Root composition | init/validate and dependency review |
-| 5 | ECR and image replication | immutable digest exists in us-east-1 |
-| 6 | Data services and ECS | private networking, secret handling, task health |
-| 7 | ALB + HTTPS | approved CIDRs, ACM certificate, redirect behavior |
-| 8 | Full plan | zero unintended changes; no eu-north-1 state/resources |
-| 9 | Apply | only after separate explicit deployment approval |
+| 2 | Initial Security Groups module | fmt, validate, mocked policy tests, traffic matrix review |
+| 3 | E-commerce source/deployment review | Confirm repository, runtime, ports, DB and persistence |
+| 4 | Final network/SG topology | Confirm ingress, routing, agent and test-worker paths |
+| 5 | IAM design and module | Trust-policy and least-privilege review for every workload |
+| 6 | ECR and image build/push | Immutable image digests exist in us-east-1 |
+| 7 | E-commerce deployment | Frontend/API/database healthy and isolated |
+| 8 | DCC deployment and integration image | DCC can securely register/reach the target |
+| 9 | On-demand test workers | Cancellation, timeout, bounded tests and cleanup verified |
+| 10 | Full Terraform plan | Zero unintended changes; no eu-north-1 state/resources |
+| 11 | Apply | Only after separate explicit deployment approval |
 
-Each stage should be a small reviewable commit or PR update. Keep an operator-facing runbook separate from the learning guide.
+Each stage should be a small reviewable commit. A successful DCC deployment alone is not acceptance: the lab's functional milestone is DCC successfully executing authorized tests against the deployed E-commerce target and returning evidence/results.
 
-## 9. How to explain this architecture
+## 12. How to explain this architecture
 
-A concise explanation for a technical review:
+> The lab contains two independent applications. DCC is the control plane that authorizes and orchestrates tests; E-commerce is a separate target application with its own frontend, backend, database, security groups, and IAM identities. A small reusable DCC integration component and temporary test workers provide the bridge for executing bounded tests against the target. This separation means a DCC outage does not automatically take E-commerce offline, and it prevents the monitoring platform from inheriting broad permissions over the application it tests.
 
-> Terraform is split into reusable modules by responsibility. The regional root composes those modules using explicit inputs and outputs. Network creates the isolated VPC and subnets; Security Groups defines which components may communicate; IAM defines which AWS actions each workload may perform. This separation makes each layer independently reviewable and reusable. The new us-east-1 environment has a separate Terraform state and naming boundary, so it cannot accidentally manage the existing eu-north-1 lab.
+## 13. Current implementation status
 
-## 10. Current implementation status
-
-Current implementation status: the reusable Network module and the us-east-1 root composition are present. CI formatting, initialization, and validation checks have passed. Network lifecycle preconditions now enforce the two-AZ requirement, configured-AZ availability, subnet containment, and non-overlap as blocking plan/apply conditions. Automated Terraform tests for valid CIDRs, out-of-range subnet CIDRs, overlapping subnet CIDRs, and unavailable AZs are passing in CI. The reusable Security Groups module is implemented and composed into the us-east-1 root. It creates seven tiers (ALB, DCC Control, Diagnostic Worker, Test API, Test Worker, Database, Cache), with no public ingress by default and public egress controlled by explicit destination CIDR allowlists that default to empty. Its three mocked Terraform policy tests are passing in CI. IAM remains design/planning only. CI checks do not create AWS resources. The next coding stage is IAM design and implementation.
+The reusable Network module and the us-east-1 root composition are present. The reusable Security Groups module is composed into that root and currently defines seven initial workload tiers with no public ingress by default and explicit destination CIDR allowlists for optional public egress. Historical CI runs reported the Network and mocked Security Groups tests passing; check the latest workflow run before relying on that status. These modules and CI checks do not create AWS resources. The seven-group policy is an initial baseline and must be reconciled with the final E-commerce topology. IAM, E-commerce infrastructure, DCC Agent deployment, and temporary test-worker infrastructure remain design/implementation work. No `terraform apply` is authorized by this document.
