@@ -34,7 +34,7 @@ run "rejects_short_recovery_window" {
   command = plan
 
   variables {
-    name_prefix = "dcc-testlab-use1"
+    name_prefix             = "dcc-testlab-use1"
     recovery_window_in_days = 3
     secrets = {
       ecommerce_mongodb_atlas_uri = {
