@@ -77,3 +77,9 @@ output "ecr_repository_urls" {
   description = "Private ECR repository URLs keyed by workload."
   value       = module.ecr.repository_urls
 }
+
+
+output "ecommerce_mongodb_atlas_secret_arn" {
+  description = "Secrets Manager ARN for the E-commerce MongoDB Atlas URI; the secret value is managed outside Terraform."
+  value       = module.secrets_manager.secret_arns["ecommerce_mongodb_atlas_uri"]
+}
