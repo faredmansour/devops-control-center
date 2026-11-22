@@ -1,33 +1,33 @@
 mock_provider "aws" {}
 
-run "creates_nine_separate_workload_security_groups_with_safe_ingress_defaults" {
+run "creates_isolated_workload_groups_and_shared_alb_ingress" {
   command = plan
 
   variables {
-    name_prefix            = "dcc-sg-test"
-    vpc_id                 = "vpc-0123456789abcdef0"
-    operator_ingress_cidrs = ["203.0.113.10/32"]
-    tags                   = { Environment = "test" }
+    name_prefix       = "dcc-sg-test"
+    vpc_id            = "vpc-0123456789abcdef0"
+    alb_ingress_cidrs = ["203.0.113.10/32"]
+    tags              = { Environment = "test" }
   }
 
   assert {
-    condition     = length(aws_security_group.this) == 9
-    error_message = "The module must create nine isolated workload Security Groups."
+    condition     = length(aws_security_group.this) == 8
+    error_message = "The module must create eight isolated workload Security Groups."
   }
 
   assert {
-    condition     = length(aws_vpc_security_group_ingress_rule.dcc_alb_https) == 1 && length(aws_vpc_security_group_ingress_rule.ecommerce_alb_https) == 0
-    error_message = "Only the explicitly approved DCC operator CIDR should receive ingress by default."
+    condition     = length(aws_vpc_security_group_ingress_rule.alb_http) == 1 && length(aws_vpc_security_group_ingress_rule.alb_dcc_http) == 1
+    error_message = "The shared ALB must allow only explicitly approved HTTP access on ports 80 and 8080."
   }
 
   assert {
-    condition     = aws_vpc_security_group_ingress_rule.ecommerce_backend_from_frontend.from_port == 8000 && aws_vpc_security_group_ingress_rule.ecommerce_backend_from_diagnostic_worker.from_port == 8000 && aws_vpc_security_group_ingress_rule.ecommerce_backend_from_test_worker.from_port == 8000
-    error_message = "The E-commerce API must accept traffic only from the frontend and approved temporary workers."
+    condition     = aws_vpc_security_group_ingress_rule.ecommerce_backend_from_alb.from_port == 8000 && aws_vpc_security_group_ingress_rule.ecommerce_backend_from_diagnostic_worker.from_port == 8000 && aws_vpc_security_group_ingress_rule.ecommerce_backend_from_test_worker.from_port == 8000
+    error_message = "The E-commerce API must accept traffic only from the shared ALB and approved temporary workers."
   }
 
   assert {
     condition     = aws_vpc_security_group_egress_rule.ecommerce_backend_to_atlas.from_port == 27017 && aws_vpc_security_group_egress_rule.ecommerce_backend_to_atlas.cidr_ipv4 == "0.0.0.0/0"
-    error_message = "The E-commerce backend must have only TCP 27017 egress for public Atlas connectivity; Atlas IP Access List constrains the remote source."
+    error_message = "The E-commerce backend must have port-limited TCP 27017 egress for Atlas; Atlas IP Access List constrains the remote source."
   }
 
   assert {
@@ -37,52 +37,33 @@ run "creates_nine_separate_workload_security_groups_with_safe_ingress_defaults" 
 
   assert {
     condition     = aws_vpc_security_group_ingress_rule.dcc_control_from_alb.from_port == 8000 && aws_vpc_security_group_ingress_rule.dcc_control_from_agent.from_port == 8000 && aws_vpc_security_group_ingress_rule.dcc_control_from_test_worker.from_port == 8000
-    error_message = "DCC control ingress must be limited to its ALB, integration agent, and temporary test workers."
-  }
-
-  assert {
-    condition     = aws_vpc_security_group_egress_rule.dcc_agent_to_control.from_port == 8000
-    error_message = "The integration agent must initiate its control channel to DCC; no inbound agent rule is allowed."
+    error_message = "DCC control ingress must be limited to the shared ALB, integration agent, and temporary test workers."
   }
 }
 
-run "allows_only_explicit_public_ingress_and_optional_https_egress" {
+run "keeps_public_ingress_closed_when_no_client_cidr_is_approved" {
   command = plan
 
   variables {
-    name_prefix                          = "dcc-sg-test"
-    vpc_id                               = "vpc-0123456789abcdef0"
-    operator_ingress_cidrs               = []
-    ecommerce_ingress_cidrs              = ["198.51.100.10/32"]
-    dcc_control_https_egress_cidrs       = ["198.51.100.0/24"]
-    diagnostic_worker_https_egress_cidrs = ["198.51.101.0/24"]
-    test_worker_https_egress_cidrs       = ["198.51.102.0/24"]
-    diagnostic_public_http_egress_cidrs  = ["203.0.113.0/24"]
+    name_prefix       = "dcc-sg-test"
+    vpc_id            = "vpc-0123456789abcdef0"
+    alb_ingress_cidrs = []
   }
 
   assert {
-    condition     = length(aws_vpc_security_group_ingress_rule.dcc_alb_https) == 0 && length(aws_vpc_security_group_ingress_rule.ecommerce_alb_https) == 1
-    error_message = "Each public ALB ingress policy must be controlled by its own explicit allowlist."
-  }
-
-  assert {
-    condition     = length(aws_vpc_security_group_egress_rule.dcc_control_https) == 1 && length(aws_vpc_security_group_egress_rule.diagnostic_worker_https) == 1 && length(aws_vpc_security_group_egress_rule.test_worker_https) == 1 && length(aws_vpc_security_group_egress_rule.diagnostic_worker_http) == 2
-    error_message = "Optional public egress must create only explicitly configured rules."
+    condition     = length(aws_vpc_security_group_ingress_rule.alb_http) == 0 && length(aws_vpc_security_group_ingress_rule.alb_dcc_http) == 0
+    error_message = "The shared ALB must remain closed when no public client CIDR is approved."
   }
 }
 
-run "rejects_invalid_operator_or_ecommerce_cidr" {
+run "rejects_invalid_alb_cidr" {
   command = plan
 
   variables {
-    name_prefix             = "dcc-sg-test"
-    vpc_id                  = "vpc-0123456789abcdef0"
-    operator_ingress_cidrs  = ["not-a-cidr"]
-    ecommerce_ingress_cidrs = ["also-not-a-cidr"]
+    name_prefix       = "dcc-sg-test"
+    vpc_id            = "vpc-0123456789abcdef0"
+    alb_ingress_cidrs = ["not-a-cidr"]
   }
 
-  expect_failures = [
-    var.operator_ingress_cidrs,
-    var.ecommerce_ingress_cidrs,
-  ]
+  expect_failures = [var.alb_ingress_cidrs]
 }
