@@ -1668,3 +1668,102 @@ class StatelessRunAPITests(SimpleTestCase):
                     },
                     format="json",
                 )
+
+
+@override_settings(
+    AWS_REGION="us-east-1",
+    DCC_ECS_CLUSTER="dcc-runners",
+    DCC_ECS_TASK_DEFINITION="dcc-runner:1",
+    DCC_ECS_SUBNETS=["subnet-12345678"],
+    DCC_ECS_SECURITY_GROUPS=["sg-12345678"],
+    DCC_ECS_CONTAINER_NAME="runner",
+    DCC_ECS_ASSIGN_PUBLIC_IP=False,
+    DCC_ECS_CLEANUP_ROLE_ARN="arn:aws:iam::123456789012:role/dcc-scheduler-stop",
+    DCC_ECS_CLEANUP_SCHEDULE_GROUP="dcc-tests",
+    DCC_DIAGNOSTIC_MAX_DURATION_SECONDS=900,
+)
+class ECSStatelessJobLifecycleTests(SimpleTestCase):
+    RUN_ID = "123e4567-e89b-42d3-a456-426614174000"
+    EXECUTION = ExecutionReference(
+        provider="ecs",
+        reference="arn:aws:ecs:us-east-1:123456789012:task/dcc-runners/abc",
+        cluster="arn:aws:ecs:us-east-1:123456789012:cluster/dcc-runners",
+    )
+
+    def setUp(self):
+        from apps.diagnostics.ecs_lifecycle import ECSStatelessJobLifecycle
+
+        self.provider = Mock()
+        self.provider.start.return_value = self.EXECUTION
+        self.provider.stop.return_value = None
+        self.ecs = Mock()
+        self.scheduler = Mock()
+        self.lifecycle = ECSStatelessJobLifecycle(
+            ecs_provider=self.provider,
+            ecs_client=self.ecs,
+            scheduler_client=self.scheduler,
+            clock=lambda: datetime(2026, 11, 22, 12, 0, 0, tzinfo=timezone.utc),
+        )
+
+    def test_start_registers_independent_one_time_stop(self):
+        execution = self.lifecycle.start(
+            run_id=self.RUN_ID,
+            target_task_id="task-123",
+            target_cluster_arn="arn:aws:ecs:us-east-1:123456789012:cluster/workloads",
+            max_duration_seconds=120,
+        )
+
+        self.assertEqual(execution, self.EXECUTION)
+        self.provider.start.assert_called_once()
+        kwargs = self.scheduler.create_schedule.call_args.kwargs
+        self.assertEqual(kwargs["Name"], "dcc-stop-123e4567e89b42d3a456426614174000")
+        self.assertEqual(kwargs["ScheduleExpression"], "at(2026-11-22T12:02:00)")
+        self.assertEqual(kwargs["ActionAfterCompletion"], "DELETE")
+        self.assertEqual(kwargs["Target"]["Arn"], "arn:aws:scheduler:::aws-sdk:ecs:stopTask")
+        self.assertEqual(self.provider.stop.call_count, 0)
+
+    def test_start_stops_task_if_cleanup_schedule_cannot_be_created(self):
+        self.scheduler.create_schedule.side_effect = ClientError(
+            {"Error": {"Code": "AccessDeniedException", "Message": "denied"}},
+            "CreateSchedule",
+        )
+
+        with self.assertRaises(DiagnosticProviderError):
+            self.lifecycle.start(
+                run_id=self.RUN_ID,
+                target_task_id="task-123",
+                max_duration_seconds=60,
+            )
+
+        self.provider.stop.assert_called_once_with(self.EXECUTION)
+
+    def test_cancel_stops_task_before_deleting_deadline(self):
+        self.lifecycle.cancel(self.RUN_ID, self.EXECUTION)
+
+        self.provider.stop.assert_called_once_with(self.EXECUTION)
+        self.scheduler.delete_schedule.assert_called_once_with(
+            Name="dcc-stop-123e4567e89b42d3a456426614174000",
+            GroupName="dcc-tests",
+        )
+
+    def test_status_reads_task_state_from_ecs(self):
+        self.ecs.describe_tasks.return_value = {
+            "tasks": [{
+                "taskArn": self.EXECUTION.reference,
+                "lastStatus": "RUNNING",
+                "desiredStatus": "RUNNING",
+                "stoppedReason": None,
+                "startedAt": datetime(2026, 11, 22, 12, 0, 1, tzinfo=timezone.utc),
+                "stoppedAt": None,
+            }],
+            "failures": [],
+        }
+
+        snapshot = self.lifecycle.status(self.RUN_ID, self.EXECUTION)
+
+        self.assertEqual(snapshot.last_status, "RUNNING")
+        self.assertEqual(snapshot.task_arn, self.EXECUTION.reference)
+        self.ecs.describe_tasks.assert_called_once_with(
+            cluster=self.EXECUTION.cluster,
+            tasks=[self.EXECUTION.reference],
+        )
