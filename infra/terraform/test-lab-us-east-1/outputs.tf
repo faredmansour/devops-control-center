@@ -103,3 +103,8 @@ output "ecs_task_definition_arns" {
   description = "ECS task definition ARNs for the three test application components."
   value       = module.ecs.task_definition_arns
 }
+
+output "ecommerce_jwt_secret_arn" {
+  description = "Secrets Manager ARN for the E-commerce JWT signing secret; the secret value is managed outside Terraform."
+  value       = module.secrets_manager.secret_arns["ecommerce_jwt_secret"]
+}
