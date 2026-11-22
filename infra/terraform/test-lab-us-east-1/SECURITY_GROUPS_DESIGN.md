@@ -10,7 +10,7 @@ The lab contains two separate application boundaries:
 
 The DCC Agent / Integration Kit and temporary Test Workers are separate execution identities/components. The agent must not expose a public management port. Test Workers must be temporary and restricted to explicitly approved targets.
 
-E-commerce MongoDB must be dedicated to E-commerce. It must not be shared with DCC. The E-commerce backend is the normal MongoDB client; frontend tasks must never connect directly to PostgreSQL.
+E-commerce MongoDB must be dedicated to E-commerce. It must not be shared with DCC. The E-commerce backend is the normal MongoDB client; frontend tasks must never connect directly to MongoDB.
 
 ## 2. Currently implemented initial traffic matrix
 
@@ -35,7 +35,7 @@ The module currently creates seven groups: `alb`, `dcc_control`, `diagnostic_wor
 Do not add or apply final E-commerce rules until the E-commerce repository and deployment configuration have been reviewed. Confirm:
 1. Frontend hosting/runtime and whether it needs an inbound application SG.
 2. Backend/API container port and health-check path.
-3. PostgreSQL deployment choice, persistence, backup and migration requirements.
+3. MongoDB deployment choice, persistence, backup and migration requirements.
 4. Whether E-commerce uses a public ALB, separate ALB, or host-based routing on a shared ALB.
 5. How DCC Test Workers reach the E-commerce API and how the target authorizes test traffic.
 6. Whether the reusable DCC Agent is a standalone task/service or another integration pattern; prefer outbound authenticated communication and no public inbound agent port.
