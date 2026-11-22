@@ -61,8 +61,8 @@ module "iam" {
       "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/ecs/${var.name_prefix}/ecommerce-backend"
     ]
   })
-  secret_arns         = merge(var.iam_secret_arns, { ecommerce = concat(lookup(var.iam_secret_arns, "ecommerce", []), [module.secrets_manager.secret_arns["ecommerce_mongodb_atlas_uri"], module.secrets_manager.secret_arns["ecommerce_jwt_secret"]]) })
-  kms_key_arns        = var.iam_kms_key_arns
+  secret_arns  = merge(var.iam_secret_arns, { ecommerce = concat(lookup(var.iam_secret_arns, "ecommerce", []), [module.secrets_manager.secret_arns["ecommerce_mongodb_atlas_uri"], module.secrets_manager.secret_arns["ecommerce_jwt_secret"]]) })
+  kms_key_arns = var.iam_kms_key_arns
 
   enable_test_worker_orchestration = false
   tags                             = local.base_tags
