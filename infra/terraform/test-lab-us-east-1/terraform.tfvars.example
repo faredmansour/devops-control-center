@@ -1,0 +1,45 @@
+# Independent DCC Test Lab environment. No secrets belong in this file.
+aws_region       = "us-east-1"
+project_name     = "DCC-TestLab"
+environment_name = "lab"
+name_prefix      = "dcc-testlab-use1"
+
+# Proposed range; verify against all VPCs, VPNs, peering/TGW routes,
+# office networks and customer networks before any apply.
+vpc_cidr = "10.81.0.0/16"
+
+# Empty selects two available AZ names in us-east-1.
+availability_zones = []
+
+public_subnet_cidrs = [
+  "10.81.0.0/24",
+  "10.81.1.0/24",
+]
+
+private_application_subnet_cidrs = [
+  "10.81.16.0/20",
+  "10.81.32.0/20",
+]
+
+private_data_subnet_cidrs = [
+  "10.81.48.0/24",
+  "10.81.49.0/24",
+]
+
+enable_nat_gateway = true
+
+# Restrict this to your current public IPv4 address, e.g. ["203.0.113.10/32"].
+# Leave empty to keep the ALB unreachable from the public internet.
+alb_ingress_cidrs = []
+
+# These immutable image tags must exist in the regional ECR repository before ECS tasks can start.
+dcc_image_tag = "bootstrap"
+ecommerce_frontend_image_tag = "frontend-bootstrap"
+ecommerce_backend_image_tag = "backend-bootstrap"
+
+common_tags = {
+  Owner = "replace-with-owner"
+}
+
+# Keep at false until images and both secret values are ready.
+enable_application_services = false
