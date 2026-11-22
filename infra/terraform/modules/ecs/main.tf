@@ -255,7 +255,7 @@ resource "aws_ecs_service" "ecommerce_frontend" {
   name                               = "${var.name_prefix}-ecommerce-web"
   cluster                            = aws_ecs_cluster.this.id
   task_definition                    = aws_ecs_task_definition.ecommerce_frontend.arn
-  desired_count                      = 1
+  desired_count                      = var.enable_application_services ? 1 : 0
   launch_type                        = "FARGATE"
   deployment_minimum_healthy_percent = 0
   deployment_maximum_percent         = 100
@@ -277,7 +277,7 @@ resource "aws_ecs_service" "ecommerce_backend" {
   name                               = "${var.name_prefix}-ecommerce-api"
   cluster                            = aws_ecs_cluster.this.id
   task_definition                    = aws_ecs_task_definition.ecommerce_backend.arn
-  desired_count                      = 1
+  desired_count                      = var.enable_application_services ? 1 : 0
   launch_type                        = "FARGATE"
   deployment_minimum_healthy_percent = 0
   deployment_maximum_percent         = 100
