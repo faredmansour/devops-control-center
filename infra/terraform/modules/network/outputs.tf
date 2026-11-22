@@ -41,3 +41,8 @@ output "route_table_ids" {
     private_data        = aws_route_table.private_data.id
   }
 }
+
+output "nat_gateway_public_ip" {
+  description = "Stable public Elastic IP used by private workloads for outbound internet traffic, or null when NAT is disabled."
+  value       = var.enable_nat_gateway ? aws_eip.nat[0].public_ip : null
+}
