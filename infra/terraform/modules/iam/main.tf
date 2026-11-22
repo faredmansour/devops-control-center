@@ -98,41 +98,36 @@ resource "aws_iam_role" "task" {
   })
 }
 
-data "aws_iam_policy_document" "dcc_worker_orchestration" {
-  count = var.enable_test_worker_orchestration ? 1 : 0
-
-  statement {
-    sid       = "RunOnlyApprovedTestWorkerTaskDefinitions"
-    effect    = "Allow"
-    actions   = ["ecs:RunTask", "ecs:DescribeTaskDefinition"]
-    resources = var.test_worker_task_definition_arns
-
-    condition {
-      test     = "ArnEquals"
-      variable = "ecs:cluster"
-      values   = [var.ecs_cluster_arn]
-    }
-  }
-
-  statement {
-    sid       = "InspectAndStopOnlyTasksInDedicatedCluster"
-    effect    = "Allow"
-    actions   = ["ecs:DescribeTasks", "ecs:StopTask"]
-    resources = [var.test_worker_task_resource_arn]
-  }
-
-  statement {
-    sid       = "PassOnlyTestWorkerRolesToEcsTasks"
-    effect    = "Allow"
-    actions   = ["iam:PassRole"]
-    resources = concat(var.test_worker_task_role_arns, var.test_worker_execution_role_arns)
-
-    condition {
-      test     = "StringEquals"
-      variable = "iam:PassedToService"
-      values   = ["ecs-tasks.amazonaws.com"]
-    }
-  }
+locals {
+  dcc_worker_orchestration_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "RunOnlyApprovedTestWorkerTaskDefinitions"
+        Effect   = "Allow"
+        Action   = ["ecs:RunTask", "ecs:DescribeTaskDefinition"]
+        Resource = var.test_worker_task_definition_arns
+        Condition = {
+          ArnEquals = { "ecs:cluster" = var.ecs_cluster_arn }
+        }
+      },
+      {
+        Sid      = "InspectAndStopOnlyTasksInDedicatedCluster"
+        Effect   = "Allow"
+        Action   = ["ecs:DescribeTasks", "ecs:StopTask"]
+        Resource = [var.test_worker_task_resource_arn]
+      },
+      {
+        Sid      = "PassOnlyTestWorkerRolesToEcsTasks"
+        Effect   = "Allow"
+        Action   = ["iam:PassRole"]
+        Resource = concat(var.test_worker_task_role_arns, var.test_worker_execution_role_arns)
+        Condition = {
+          StringEquals = { "iam:PassedToService" = "ecs-tasks.amazonaws.com" }
+        }
+      }
+    ]
+  })
 }
 
 resource "aws_iam_role_policy" "dcc_worker_orchestration" {
@@ -140,5 +135,5 @@ resource "aws_iam_role_policy" "dcc_worker_orchestration" {
 
   name   = "${var.name_prefix}-dcc-worker-orchestration"
   role   = aws_iam_role.task["dcc"].id
-  policy = data.aws_iam_policy_document.dcc_worker_orchestration[0].json
+  policy = local.dcc_worker_orchestration_policy
 }
