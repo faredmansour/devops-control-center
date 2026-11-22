@@ -83,3 +83,23 @@ output "ecommerce_mongodb_atlas_secret_arn" {
   description = "Secrets Manager ARN for the E-commerce MongoDB Atlas URI; the secret value is managed outside Terraform."
   value       = module.secrets_manager.secret_arns["ecommerce_mongodb_atlas_uri"]
 }
+
+output "ecs_cluster_name" {
+  description = "ECS cluster hosting the DCC and E-commerce test services."
+  value       = module.ecs.cluster_name
+}
+
+output "test_lab_alb_dns_name" {
+  description = "Shared HTTP ALB DNS name. E-commerce uses port 80; DCC uses port 8080."
+  value       = module.ecs.load_balancer_dns_name
+}
+
+output "ecs_service_names" {
+  description = "ECS service names for the three test application components."
+  value       = module.ecs.service_names
+}
+
+output "ecs_task_definition_arns" {
+  description = "ECS task definition ARNs for the three test application components."
+  value       = module.ecs.task_definition_arns
+}
