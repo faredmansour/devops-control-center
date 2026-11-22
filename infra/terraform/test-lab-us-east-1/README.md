@@ -80,7 +80,7 @@ Two manual GitHub Actions workflows build immutable image tags and push to the r
 - DCC: `.github/workflows/testlab-ecr.yml` in this repository.
 - E-commerce: the same workflow path in `faredmansour/ecommerce-project`.
 
-Before running either workflow:
+See [GITHUB_OIDC_SETUP.md](./GITHUB_OIDC_SETUP.md) for the exact trust policies and least-privilege ECR push policy. Before running either workflow:
 
 1. Create a GitHub OIDC identity provider in AWS IAM if one does not already exist: issuer `https://token.actions.githubusercontent.com`, audience `sts.amazonaws.com`.
 2. Create one IAM role per repository. Its trust policy must restrict `token.actions.githubusercontent.com:sub` to the exact repository and branch:
