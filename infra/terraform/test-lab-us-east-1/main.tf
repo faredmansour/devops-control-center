@@ -97,5 +97,6 @@ module "ecs" {
   ecommerce_backend_image        = "${module.ecr.repository_urls["ecommerce"]}:${var.ecommerce_backend_image_tag}"
   mongodb_atlas_secret_arn       = module.secrets_manager.secret_arns["ecommerce_mongodb_atlas_uri"]
   jwt_secret_arn                 = module.secrets_manager.secret_arns["ecommerce_jwt_secret"]
+  enable_application_services    = var.enable_application_services
   tags                           = local.base_tags
 }
