@@ -144,4 +144,4 @@ A concise explanation for a technical review:
 
 ## 10. Current implementation status
 
-At this point, the PR contains the environment input example, security-group design, and this architecture guide. The actual reusable network, security-groups, and IAM modules are **not yet implemented**. The next coding step is to extract the current regional root resources into those modules, parameterize every region/environment-specific value, and validate each module before composing the root.
+Current implementation status: the reusable Network module and the us-east-1 root composition are present. The Network module still requires Terraform-specific formatting, initialization, validation, and CIDR positive/negative checks. Security Groups and IAM remain design/planning only; no executable modules exist for them yet. CI has been updated to validate both regional roots and to check formatting of the shared modules. These checks do not create AWS resources. Once the Network validation gates pass, the next coding stage is the Security Groups module.
