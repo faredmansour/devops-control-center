@@ -19,7 +19,7 @@ resource "aws_ecs_cluster" "this" {
     name  = "containerInsights"
     value = "disabled"
   }
-  tags = var.tags
+  tags       = var.tags
 }
 
 resource "aws_lb" "this" {
@@ -274,11 +274,11 @@ resource "aws_ecs_service" "ecommerce_frontend" {
 }
 
 resource "aws_ecs_service" "ecommerce_backend" {
-  name            = "${var.name_prefix}-ecommerce-api"
-  cluster         = aws_ecs_cluster.this.id
-  task_definition = aws_ecs_task_definition.ecommerce_backend.arn
-  desired_count   = 1
-  launch_type     = "FARGATE"
+  name                               = "${var.name_prefix}-ecommerce-api"
+  cluster                            = aws_ecs_cluster.this.id
+  task_definition                    = aws_ecs_task_definition.ecommerce_backend.arn
+  desired_count                      = 1
+  launch_type                        = "FARGATE"
   deployment_minimum_healthy_percent = 0
   deployment_maximum_percent         = 100
   network_configuration {
