@@ -1,6 +1,6 @@
 # DCC Test Lab — us-east-1
 
-**Status:** Network, Security Groups, IAM, and ECR Terraform modules are composed in this independent root. Review and CI validation are required; no AWS resources have been deployed.
+**Status:** Network, Security Groups, IAM, ECR, and Secrets Manager Terraform modules are composed in this independent root. Review and CI validation are required; no AWS resources have been deployed.
 
 ## Purpose and isolation
 
@@ -49,7 +49,7 @@ The reusable Network module currently defines:
 - Subnet CIDR containment and overlap preconditions.
 - Two-AZ selection and availability checks.
 
-The root composes Network, Security Groups, IAM, and ECR modules and exposes non-secret network, workload role, and repository outputs. ECR defines four private repositories (DCC, E-commerce, Agent, Test Worker), enables scan-on-push and immutable tags, encrypts images with AES-256, and retains the ten most recent images. Each IAM execution role receives pull access only to its corresponding repository ARN.
+The root composes Network, Security Groups, IAM, and ECR modules and exposes non-secret network, workload role, and repository outputs. ECR defines four private repositories (DCC, E-commerce, Agent, Test Worker), enables scan-on-push and immutable tags, encrypts images with AES-256, and retains the ten most recent images. Each IAM execution role receives pull access only to its corresponding repository ARN. Secrets Manager creates metadata for the E-commerce MongoDB Atlas URI; the actual URI is deliberately not managed by Terraform. The E-commerce execution role receives read access only to that secret ARN.
 
 ## How to read the code
 
@@ -75,7 +75,7 @@ The plan with `-refresh=false` checks the proposed configuration without queryin
 
 ## Not implemented yet
 
-ECS, ALB, HTTPS/ACM, VPC endpoints, remote state bootstrap, image build/push automation, and cost validation are future stages. E-commerce uses MongoDB Atlas as an external managed database; Atlas cluster/network/user setup and its Secrets Manager connection secret are not created by the current Terraform modules. The SG design is documented in `SECURITY_GROUPS_DESIGN.md`, but it is not yet executable Terraform.
+ECS, ALB, HTTPS/ACM, VPC endpoints, remote state bootstrap, image build/push automation, and cost validation are future stages. E-commerce uses MongoDB Atlas as an external managed database; Atlas cluster/network/user setup and the secure population of its Secrets Manager connection secret are external follow-up steps; Terraform creates the secret container only. The SG design is documented in `SECURITY_GROUPS_DESIGN.md`, but it is not yet executable Terraform.
 
 ## Deployment blockers
 
