@@ -26,6 +26,8 @@ E-commerce MongoDB must be dedicated to E-commerce. It must not be shared with D
 | Test API SG | Cache SG | TCP 6379 | Egress / ingress | Allow |
 | Test Worker SG | Cache SG | TCP 6379 | Egress / ingress | Allow |
 
+The current module's `database` ingress/egress is TCP 5432 (PostgreSQL), and `test_api` ingress is TCP 8080. These are the implemented generic baseline ports, not the E-commerce ports. The reviewed E-commerce backend container exposes TCP 8000 and connects to MongoDB on TCP 27017; therefore the current module is not ready to secure this E-commerce deployment. Do not deploy E-commerce using these generic rules. The final module must be refactored and tested for the actual E-commerce ports and explicit source SGs.
+
 The module currently creates seven groups: `alb`, `dcc_control`, `diagnostic_worker`, `test_api`, `test_worker`, `database`, and `cache`.
 
 **Important:** `test_api`, `test_worker`, `database`, and `cache` are currently generic application-under-test tiers. They are not yet a confirmed final mapping for the E-commerce frontend/backend/database. In particular, the current database rule permits both Test API and Test Worker; the final E-commerce database should instead allow only the E-commerce backend and explicitly approved maintenance/migration path. Reconcile these rules before creating the E-commerce data tier.
