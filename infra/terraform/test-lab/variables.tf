@@ -198,6 +198,16 @@ variable "dcc_app_image_digest" {
   }
 }
 
+variable "dcc_agent_image_digest" {
+  description = "Immutable sha256 digest of the reusable DCC Agent image pushed to the dedicated dcc-agent ECR repository."
+  type        = string
+
+  validation {
+    condition     = can(regex("^sha256:[0-9a-f]{64}$", var.dcc_agent_image_digest))
+    error_message = "dcc_agent_image_digest must be a sha256 digest."
+  }
+}
+
 variable "common_tags" {
   description = "Additional non-sensitive tags applied to all managed resources."
   type        = map(string)

@@ -103,6 +103,47 @@ A production task definition should include the following minimum configuration:
 
 The exact values should match the environment and enabled providers. Sensitive values such as `DJANGO_SECRET_KEY` should be injected through AWS Secrets Manager or another approved native secret mechanism, not as plaintext environment variables.
 
+## Reusable diagnostic Agent image
+
+The DCC application image and the diagnostic Agent image are separate artifacts.
+The long-running DCC ECS service uses the dcc-app image; each explicitly
+requested diagnostic/discovery run launches a short-lived task from dcc-agent.
+
+The Test Lab Terraform creates a dedicated immutable ECR repository and a
+separate one-shot task definition for the Agent. The Agent task definition must
+use the container name configured by DCC_ECS_CONTAINER_NAME and must not
+override the image entrypoint with the legacy Django runner command.
+
+Build the image from the repository root:
+
+~~~bash
+docker build -f agent/Dockerfile -t dcc-agent:release .
+~~~
+
+Bootstrap the dedicated ECR repository before the first push (review the
+Terraform plan, then apply only the ECR repository and lifecycle policy if they
+do not exist yet). Authenticate Docker to the approved account/region, tag and
+push the image, then retrieve its immutable digest:
+
+~~~bash
+aws ecr get-login-password --region <region> | docker login --username AWS --password-stdin <account-id>.dkr.ecr.<region>.amazonaws.com
+
+docker tag dcc-agent:release <account-id>.dkr.ecr.<region>.amazonaws.com/dcc-agent:<immutable-tag>
+docker push <account-id>.dkr.ecr.<region>.amazonaws.com/dcc-agent:<immutable-tag>
+
+aws ecr describe-images --repository-name dcc-agent --image-ids imageTag=<immutable-tag> --query "imageDetails[0].imageDigest" --output text
+~~~
+
+Pass the returned sha256 digest as dcc_agent_image_digest to the reviewed
+Terraform plan. The ECS execution role needs ECR pull access to dcc-agent; the
+Agent task role separately receives the scoped read-only ECS discovery policy.
+
+Do not enable DCC_STATELESS_RUN_API_ENABLED on a publicly reachable endpoint.
+The API currently has no user authentication; keep it disabled until the
+private network/security-group boundary is confirmed and a separate auth design
+is implemented. Discovery runs are manually requested and use the cluster
+allowlist configured through DCC_ECS_CLUSTERS.
+
 ## IAM
 
 ### Execution role

@@ -46,7 +46,7 @@ data "aws_iam_policy_document" "ecs_execution" {
       "ecr:GetDownloadUrlForLayer",
       "ecr:BatchGetImage",
     ]
-    resources = [aws_ecr_repository.dcc_app.arn]
+    resources = [aws_ecr_repository.dcc_app.arn, aws_ecr_repository.dcc_agent.arn]
   }
 
   statement {
@@ -285,11 +285,29 @@ resource "aws_iam_role" "diagnostic_runner_task" {
 
 data "aws_iam_policy_document" "diagnostic_runner_task" {
   statement {
-    sid     = "DescribeTasksInTestLab"
-    effect  = "Allow"
-    actions = ["ecs:DescribeTasks"]
+    sid       = "DescribeConfiguredEcsCluster"
+    effect    = "Allow"
+    actions   = ["ecs:DescribeClusters"]
+    resources = [aws_ecs_cluster.test_lab.arn]
+  }
+
+  statement {
+    sid       = "ListServicesInConfiguredCluster"
+    effect    = "Allow"
+    actions   = ["ecs:ListServices"]
+    resources = [aws_ecs_cluster.test_lab.arn]
+  }
+
+  statement {
+    sid    = "DescribeServicesAndTasksInConfiguredCluster"
+    effect = "Allow"
+    actions = [
+      "ecs:DescribeServices",
+      "ecs:DescribeTasks",
+    ]
     resources = [
       aws_ecs_cluster.test_lab.arn,
+      "arn:${data.aws_partition.current.partition}:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:service/${aws_ecs_cluster.test_lab.name}/*",
       "arn:${data.aws_partition.current.partition}:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:task/${aws_ecs_cluster.test_lab.name}/*"
     ]
   }

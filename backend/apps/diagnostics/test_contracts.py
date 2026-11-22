@@ -24,6 +24,24 @@ class DiagnosticRunRequestContractTests(SimpleTestCase):
         serializer = DiagnosticRunRequestSerializer(data=self.valid_payload())
         self.assertTrue(serializer.is_valid(), serializer.errors)
 
+    def test_accepts_explicit_ecs_discovery_without_target_task(self):
+        payload = {
+            "schema_version": RUN_SCHEMA_VERSION,
+            "test_type": "ecs_discovery",
+            "environment": "staging",
+            "limits": {"max_duration_seconds": 120},
+        }
+        serializer = DiagnosticRunRequestSerializer(data=payload)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertNotIn("target_task_id", serializer.validated_data)
+
+    def test_runtime_health_still_requires_target_task(self):
+        payload = self.valid_payload()
+        payload.pop("target_task_id")
+        serializer = DiagnosticRunRequestSerializer(data=payload)
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("target_task_id", serializer.errors)
+
     def test_rejects_unknown_fields(self):
         payload = self.valid_payload()
         payload["task_definition"] = "attacker-controlled"

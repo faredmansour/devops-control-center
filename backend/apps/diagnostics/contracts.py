@@ -3,12 +3,15 @@
 This module deliberately defines validation only. It does not launch jobs or imply
 that every catalog entry already has an execution adapter.
 """
+import json
+
 from rest_framework import serializers
 
 
 RUN_SCHEMA_VERSION = 1
 RUN_TYPES = (
     "runtime_health",
+    "ecs_discovery",
     "api_smoke",
     "database_readonly",
     "security_scan",
@@ -49,6 +52,7 @@ class DiagnosticRunRequestSerializer(StrictSerializer):
     target_task_id = serializers.RegexField(
         regex=r"\A[A-Za-z0-9][A-Za-z0-9._:-]{0,127}\Z",
         max_length=128,
+        required=False,
     )
     limits = DiagnosticRunLimitsSerializer()
 
@@ -63,6 +67,18 @@ class DiagnosticRunRequestSerializer(StrictSerializer):
         test_type = attrs["test_type"]
         environment = attrs["environment"]
         limits = attrs["limits"]
+        if test_type == "runtime_health" and not attrs.get("target_task_id"):
+            raise serializers.ValidationError({
+                "target_task_id": "This field is required for runtime health."
+            })
+        if test_type == "ecs_discovery" and any(
+            key in limits for key in (
+                "max_requests", "max_requests_per_second", "max_virtual_users"
+            )
+        ):
+            raise serializers.ValidationError({
+                "limits": "Load-generation limits are not valid for ECS discovery."
+            })
 
         if test_type == "load_test":
             required = {"max_requests", "max_requests_per_second", "max_virtual_users"}
@@ -137,12 +153,13 @@ class DiagnosticRunCallbackSerializer(StrictSerializer):
     """Bounded payload accepted from a short-lived diagnostic runner."""
     schema_version = serializers.IntegerField()
     run_id = serializers.UUIDField()
-    test_type = serializers.ChoiceField(choices=("runtime_health",))
+    test_type = serializers.ChoiceField(choices=("runtime_health", "ecs_discovery"))
     result_status = serializers.ChoiceField(choices=("healthy", "failed", "unknown"))
     summary = serializers.CharField(max_length=2000)
-    task_last_status = serializers.CharField(max_length=32)
-    task_health_status = serializers.CharField(max_length=32)
-    containers = DiagnosticRunContainerResultSerializer(many=True, max_length=50)
+    task_last_status = serializers.CharField(max_length=32, required=False, default="UNKNOWN")
+    task_health_status = serializers.CharField(max_length=32, required=False, default="UNKNOWN")
+    containers = DiagnosticRunContainerResultSerializer(many=True, max_length=50, required=False, default=list)
+    discovery = serializers.JSONField(required=False)
     started_at = serializers.DateTimeField()
     finished_at = serializers.DateTimeField()
 
@@ -153,7 +170,31 @@ class DiagnosticRunCallbackSerializer(StrictSerializer):
             )
         return value
 
+    def validate_discovery(self, value):
+        if not isinstance(value, dict) or value.get("schema_version") != 1:
+            raise serializers.ValidationError("The discovery schema is invalid.")
+        if value.get("provider") != "aws" or value.get("discovery_scope") != [
+            "ecs.clusters", "ecs.services"
+        ]:
+            raise serializers.ValidationError("The discovery scope is invalid.")
+        clusters = value.get("clusters")
+        if not isinstance(clusters, list) or len(clusters) > 20:
+            raise serializers.ValidationError("The discovery cluster list exceeds its limit.")
+        if len(json.dumps(value, separators=(",", ":"))) > 250_000:
+            raise serializers.ValidationError("The discovery result exceeds its size limit.")
+        for cluster in clusters:
+            if not isinstance(cluster, dict):
+                raise serializers.ValidationError("A discovered cluster is invalid.")
+            services = cluster.get("services")
+            if not isinstance(services, list) or len(services) > 50:
+                raise serializers.ValidationError("A cluster service list exceeds its limit.")
+        return value
+
     def validate(self, attrs):
+        if attrs["test_type"] == "ecs_discovery" and "discovery" not in attrs:
+            raise serializers.ValidationError({"discovery": "ECS discovery result is required."})
+        if attrs["test_type"] == "runtime_health" and "discovery" in attrs:
+            raise serializers.ValidationError({"discovery": "Discovery data is not valid for runtime health."})
         if attrs["finished_at"] < attrs["started_at"]:
             raise serializers.ValidationError({
                 "finished_at": "Finish time cannot be earlier than start time."

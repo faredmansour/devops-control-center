@@ -75,16 +75,16 @@ class ECSDiagnosticExecutionProvider:
     def start(
         self,
         session_id: str,
-        target_task_id: str,
+        target_task_id: str | None,
         target_cluster_arn: str | None = None,
         extra_environment: dict[str, str] | None = None,
     ) -> ExecutionReference:
         if not is_valid_session_id(session_id):
             raise DiagnosticProviderError("The diagnostic session ID is invalid.")
-        if not is_valid_task_id(target_task_id):
+        if target_task_id is not None and not is_valid_task_id(target_task_id):
             raise DiagnosticProviderError("The diagnostic target task ID is invalid.")
         self._validate_task_definition()
-        allowed_extra_names = {"DCC_RESULT_CALLBACK_URL", "DCC_RESULT_CALLBACK_TOKEN"}
+        allowed_extra_names = {"DCC_AGENT_MODE", "DCC_DISCOVERY_CLUSTERS", "DCC_RESULT_CALLBACK_URL", "DCC_RESULT_CALLBACK_TOKEN"}
         extra_environment = extra_environment or {}
         if (set(extra_environment).difference(allowed_extra_names)
                 or any(not isinstance(value, str) or not value or len(value) > 4096
@@ -109,14 +109,21 @@ class ECSDiagnosticExecutionProvider:
                     "name": self._config.container_name,
                     "environment": [
                         {"name": "DIAGNOSTIC_SESSION_ID", "value": session_id},
-                        {"name": "TARGET_TASK_ID", "value": target_task_id},
+                        {"name": "AWS_REGION", "value": self._config.region},
+                        {"name": "DCC_AGENT_MODE", "value": extra_environment.get("DCC_AGENT_MODE", "runtime_health")},
+                        *(
+                            [{"name": "TARGET_TASK_ID", "value": target_task_id}]
+                            if target_task_id
+                            else []
+                        ),
                         *(
                             [{"name": "TARGET_CLUSTER_ARN", "value": target_cluster_arn}]
                             if target_cluster_arn
                             else []
                         ),
                         *[{"name": name, "value": value}
-                          for name, value in sorted(extra_environment.items())],
+                          for name, value in sorted(extra_environment.items())
+                          if name not in {"DCC_AGENT_MODE", "AWS_REGION"}],
                     ],
                 }]
             },
@@ -130,9 +137,9 @@ class ECSDiagnosticExecutionProvider:
             response = self._get_client().run_task(**request)
         except (BotoCoreError, ClientError):
             logger.warning(
-                "ECS diagnostic worker launch failed (session_id=%s, target_task_id=%s).",
+                "ECS diagnostic worker launch failed (session_id=%s, target_task_present=%s).",
                 session_id,
-                target_task_id,
+                bool(target_task_id),
             )
             raise DiagnosticProviderError(
                 "The diagnostic worker could not be started."
@@ -143,9 +150,9 @@ class ECSDiagnosticExecutionProvider:
         task_arn = tasks[0].get("taskArn") if tasks else None
         if failures or not task_arn:
             logger.warning(
-                "ECS diagnostic worker launch returned no task (session_id=%s, target_task_id=%s).",
+                "ECS diagnostic worker launch returned no task (session_id=%s, target_task_present=%s).",
                 session_id,
-                target_task_id,
+                bool(target_task_id),
             )
             raise DiagnosticProviderError(
                 "The diagnostic worker could not be started."

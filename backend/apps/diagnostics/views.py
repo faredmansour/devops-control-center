@@ -62,7 +62,7 @@ def _run_capability(run_id: str, execution: ExecutionReference, request_data: di
             "provider": execution.provider,
             "task_arn": execution.reference,
             "cluster": execution.cluster,
-            "target_task_id": request_data["target_task_id"],
+            "target_task_id": request_data.get("target_task_id"),
             "test_type": request_data["test_type"],
             "environment": request_data["environment"],
             "limits": request_data["limits"],
@@ -157,13 +157,23 @@ class StatelessRunCollectionView(APIView):
         )
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
-        if data["test_type"] != "runtime_health":
+        if data["test_type"] not in {"runtime_health", "ecs_discovery"}:
             raise ValidationError({
                 "test_type": "This test adapter is not implemented in the current release."
             })
         limits = data["limits"]
-        target_cluster_arn = _resolve_target_cluster_arn(data["target_task_id"])
+        target_task_id = data.get("target_task_id")
+        target_cluster_arn = (
+            _resolve_target_cluster_arn(target_task_id)
+            if data["test_type"] == "runtime_health"
+            else None
+        )
         run_id = str(uuid4())
+
+        if data["test_type"] == "ecs_discovery" and not settings.DCC_ECS_CLUSTERS:
+            raise ValidationError({
+                "detail": "No ECS discovery clusters are configured for this DCC environment."
+            })
 
         callback_base_url = settings.DCC_RESULT_CALLBACK_BASE_URL.rstrip("/")
         if not callback_base_url:
@@ -173,10 +183,19 @@ class StatelessRunCollectionView(APIView):
         try:
             execution = _lifecycle().start(
                 run_id=run_id,
-                target_task_id=data["target_task_id"],
+                target_task_id=target_task_id,
                 target_cluster_arn=target_cluster_arn,
                 max_duration_seconds=limits["max_duration_seconds"],
                 runner_environment={
+                    "DCC_AGENT_MODE": (
+                        "discover_ecs" if data["test_type"] == "ecs_discovery"
+                        else "runtime_health"
+                    ),
+                    **(
+                        {"DCC_DISCOVERY_CLUSTERS": ",".join(settings.DCC_ECS_CLUSTERS)}
+                        if data["test_type"] == "ecs_discovery"
+                        else {}
+                    ),
                     "DCC_RESULT_CALLBACK_URL": callback_url,
                     "DCC_RESULT_CALLBACK_TOKEN": callback_token,
                 },

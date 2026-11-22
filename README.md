@@ -54,6 +54,7 @@ The browser never receives AWS credentials. The target architecture delegates hu
 ```text
 .
 ├── backend/                 # Django + DRF control plane
+├── agent/                   # Reusable, one-shot DCC Agent image
 ├── frontend/                # React + TypeScript + Vite
 ├── test-app/                # Standalone FastAPI test laboratory
 ├── infra/terraform/test-lab # AWS infrastructure as code
@@ -63,6 +64,10 @@ The browser never receives AWS credentials. The target architecture delegates hu
 ├── Dockerfile               # Production multi-stage image
 └── .github/workflows/       # CI, security and Terraform automation
 ```
+
+## Reusable DCC Agent
+
+The standalone agent image lives in `agent/`. It is designed to run as an explicitly launched, short-lived task, not as an always-on sidecar. The initial implementation supports ECS runtime-health inspection and bounded, read-only ECS cluster/service discovery. See [Agent README](agent/README.md) and [Reusable Agent Boundary](docs/architecture/REUSABLE_AGENT_BOUNDARY.md). The current feature branch connects the stateless run API to this image and updates the Test Lab Terraform to use a dedicated one-shot Agent task definition and ECR repository. The initial API supports explicit ECS discovery and runtime-health jobs. This is code-level integration, not proof of a deployed AWS end-to-end run; CI, image publishing, private-network review, Terraform plan review, and live validation remain required.
 
 ## Architecture documentation
 

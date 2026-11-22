@@ -19,6 +19,7 @@ from apps.diagnostics.ecs_provider import (
 )
 from apps.diagnostics.impact import DiagnosticImpactService
 from apps.diagnostics.models import DiagnosticSession, ExecutionReference
+from apps.diagnostics.result_store import clear_results
 from apps.diagnostics.providers import (
     DiagnosticProviderError,
     InMemoryDiagnosticExecutionProvider,
@@ -116,9 +117,43 @@ class ECSDiagnosticExecutionProviderTests(TestCase):
             environment,
             [
                 {"name": "DIAGNOSTIC_SESSION_ID", "value": session_id},
+                {"name": "AWS_REGION", "value": "us-east-1"},
+                {"name": "DCC_AGENT_MODE", "value": "runtime_health"},
                 {"name": "TARGET_TASK_ID", "value": "task-001"},
                 {"name": "TARGET_CLUSTER_ARN", "value": "arn:aws:ecs:region:123:cluster/workloads"},
             ],
+        )
+
+    def test_start_supports_discovery_mode_without_target_task(self) -> None:
+        self.client.run_task.return_value = {
+            "tasks": [{"taskArn": "arn:aws:ecs:us-east-1:123:task/agent"}],
+            "failures": [],
+        }
+
+        self.provider.start(
+            "123e4567-e89b-42d3-a456-426614174000",
+            None,
+            extra_environment={
+                "DCC_AGENT_MODE": "discover_ecs",
+                "DCC_DISCOVERY_CLUSTERS": "sample-cluster",
+                "DCC_RESULT_CALLBACK_URL": "https://dcc.internal/result/",
+                "DCC_RESULT_CALLBACK_TOKEN": "signed-token",
+            },
+        )
+
+        environment = self.client.run_task.call_args.kwargs[
+            "overrides"
+        ]["containerOverrides"][0]["environment"]
+        names = [item["name"] for item in environment]
+        self.assertEqual(names.count("DCC_AGENT_MODE"), 1)
+        self.assertIn(
+            {"name": "DCC_AGENT_MODE", "value": "discover_ecs"},
+            environment,
+        )
+        self.assertNotIn("TARGET_TASK_ID", names)
+        self.assertIn(
+            {"name": "DCC_DISCOVERY_CLUSTERS", "value": "sample-cluster"},
+            environment,
         )
 
     def test_start_rejects_missing_task_arn(self) -> None:
@@ -1539,6 +1574,8 @@ class StatelessRunAPITests(SimpleTestCase):
     )
 
     def setUp(self):
+        clear_results()
+        self.addCleanup(clear_results)
         self.client = APIClient()
         self.discovery_patcher = patch(
             "apps.diagnostics.views.get_ecs_discovery_provider"
@@ -1585,6 +1622,107 @@ class StatelessRunAPITests(SimpleTestCase):
         self.assertEqual(
             self.lifecycle.start.call_args.kwargs["max_duration_seconds"],
             120,
+        )
+
+    @patch("apps.diagnostics.views.uuid4")
+    @patch("apps.diagnostics.views._lifecycle")
+    @override_settings(
+        DCC_RESULT_CALLBACK_BASE_URL="https://dcc.internal",
+        DCC_STATELESS_RUN_API_ENABLED=True,
+        DCC_ECS_CLUSTERS=["workloads"],
+    )
+    def test_create_ecs_discovery_run_does_not_require_target_task(
+        self, lifecycle_factory, uuid_factory
+    ):
+        uuid_factory.return_value = self.RUN_ID
+        lifecycle_factory.return_value = self.lifecycle
+
+        response = self.client.post(
+            "/api/diagnostic-sessions/runs/",
+            {
+                "schema_version": 1,
+                "test_type": "ecs_discovery",
+                "environment": "staging",
+                "limits": {"max_duration_seconds": 120},
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data["test_type"], "ecs_discovery")
+        self.discovery.get_running_task.assert_not_called()
+        kwargs = self.lifecycle.start.call_args.kwargs
+        self.assertIsNone(kwargs["target_task_id"])
+        self.assertIsNone(kwargs["target_cluster_arn"])
+        self.assertEqual(
+            kwargs["runner_environment"]["DCC_AGENT_MODE"], "discover_ecs"
+        )
+        self.assertTrue(kwargs["runner_environment"]["DCC_RESULT_CALLBACK_TOKEN"])
+
+    @patch("apps.diagnostics.views.uuid4")
+    @patch("apps.diagnostics.views._lifecycle")
+    @override_settings(DCC_ECS_CLUSTERS=["workloads"])
+    def test_discovery_callback_is_accepted_and_exposed_in_run_result(
+        self, lifecycle_factory, uuid_factory
+    ):
+        uuid_factory.return_value = self.RUN_ID
+        lifecycle_factory.return_value = self.lifecycle
+        created = self.client.post(
+            "/api/diagnostic-sessions/runs/",
+            {
+                "schema_version": 1,
+                "test_type": "ecs_discovery",
+                "environment": "staging",
+                "limits": {"max_duration_seconds": 120},
+            },
+            format="json",
+        )
+        self.assertEqual(created.status_code, 201, created.data)
+        callback_token = self.lifecycle.start.call_args.kwargs[
+            "runner_environment"
+        ]["DCC_RESULT_CALLBACK_TOKEN"]
+
+        callback = self.client.post(
+            f"/api/diagnostic-sessions/runs/{self.RUN_ID}/result/",
+            {
+                "schema_version": 1,
+                "run_id": self.RUN_ID,
+                "test_type": "ecs_discovery",
+                "result_status": "healthy",
+                "summary": "Discovered 1 ECS cluster and 1 service.",
+                "discovery": {
+                    "schema_version": 1,
+                    "provider": "aws",
+                    "discovery_scope": ["ecs.clusters", "ecs.services"],
+                    "truncated": False,
+                    "counts": {"clusters": 1, "services": 1},
+                    "clusters": [{
+                        "arn": "arn:aws:ecs:us-east-1:123456789012:cluster/sample",
+                        "name": "sample",
+                        "status": "ACTIVE",
+                        "services": [{
+                            "arn": "arn:aws:ecs:us-east-1:123456789012:service/sample/web",
+                            "name": "web",
+                            "status": "ACTIVE",
+                        }],
+                    }],
+                },
+                "started_at": "2026-11-22T12:00:00Z",
+                "finished_at": "2026-11-22T12:00:01Z",
+            },
+            format="json",
+            HTTP_X_DCC_RESULT_TOKEN=callback_token,
+        )
+        self.assertEqual(callback.status_code, 202, callback.data)
+
+        result = self.client.get(
+            f"/api/diagnostic-sessions/runs/{self.RUN_ID}/",
+            HTTP_X_DCC_RUN_TOKEN=created.data["capability_token"],
+        )
+        self.assertEqual(result.status_code, 200, result.data)
+        self.assertEqual(result.data["status"], "completed")
+        self.assertEqual(
+            result.data["result"]["discovery"]["counts"]["services"], 1
         )
 
     @patch("apps.diagnostics.views._lifecycle")
