@@ -47,7 +47,7 @@ The private application tier uses one NAT Gateway when `enable_nat_gateway = tru
 | `enable_nat_gateway` | Whether to create the NAT Gateway |
 | `tags` | Additional non-sensitive tags |
 
-All subnet CIDRs are ordered to correspond to the two selected AZs. Preconditions verify that subnet ranges fit within the VPC and do not overlap each other.
+All subnet CIDRs are ordered to correspond to the two selected AZs. VPC lifecycle preconditions stop planning/applying when fewer than two AZs are available, an explicitly configured AZ is unavailable, a subnet falls outside the VPC, or subnet ranges overlap. These are blocking preconditions rather than warning-only `check` assertions.
 
 ## Outputs
 
