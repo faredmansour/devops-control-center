@@ -130,7 +130,7 @@ The currently implemented seven groups (`alb`, `dcc_control`, `diagnostic_worker
 
 In particular:
 - `test_api` and `test_worker` are generic application-under-test tiers. Their final names and ownership must be aligned with the E-commerce workload once its deployment design is confirmed.
-- The current `database` and `cache` groups describe generic test-target data services; do not assume they are ready to represent the dedicated E-commerce PostgreSQL boundary without reviewing the module rules.
+- The current `database` and `cache` groups describe generic test-target data services; do not assume they are ready to represent the dedicated E-commerce MongoDB boundary without reviewing the module rules.
 - The current ALB-to-DCC path does not establish how E-commerce is exposed to users or how DCC test traffic reaches it.
 - Separate E-commerce frontend/backend/database groups and possibly a separate ALB may be required. Do not add or apply these rules until ports, ingress, and routing are confirmed from the E-commerce deployment design.
 
@@ -145,7 +145,7 @@ In particular:
 ## 10. Cost and operational considerations
 
 - One NAT Gateway is cheaper than one per AZ but creates an AZ dependency and possible cross-AZ data charges. It also incurs hourly and data-processing charges while provisioned.
-- ECS Fargate, ALB, NAT, and managed PostgreSQL each have independent recurring costs. A managed database should be selected only after the E-commerce persistence and budget requirements are reviewed.
+- ECS Fargate, ALB, NAT, and managed MongoDB each have independent recurring costs. A managed database should be selected only after the E-commerce persistence and budget requirements are reviewed.
 - A containerized database may reduce initial lab cost but introduces persistence, backup, recovery, and operational responsibilities. It must not be treated as disposable if E-commerce data needs to survive deployments.
 - Load and security testing can create target, worker, data-transfer, and logging costs. Set hard test limits and clean up temporary workers.
 
