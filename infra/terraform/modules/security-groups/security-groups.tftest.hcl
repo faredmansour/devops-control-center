@@ -50,14 +50,14 @@ run "allows_only_explicit_public_ingress_and_optional_https_egress" {
   command = plan
 
   variables {
-    name_prefix               = "dcc-sg-test"
-    vpc_id                    = "vpc-0123456789abcdef0"
-    operator_ingress_cidrs    = []
-    ecommerce_ingress_cidrs   = ["198.51.100.10/32"]
-    dcc_control_https_egress_cidrs = ["198.51.100.0/24"]
+    name_prefix                          = "dcc-sg-test"
+    vpc_id                               = "vpc-0123456789abcdef0"
+    operator_ingress_cidrs               = []
+    ecommerce_ingress_cidrs              = ["198.51.100.10/32"]
+    dcc_control_https_egress_cidrs       = ["198.51.100.0/24"]
     diagnostic_worker_https_egress_cidrs = ["198.51.101.0/24"]
-    test_worker_https_egress_cidrs = ["198.51.102.0/24"]
-    diagnostic_public_http_egress_cidrs = ["203.0.113.0/24"]
+    test_worker_https_egress_cidrs       = ["198.51.102.0/24"]
+    diagnostic_public_http_egress_cidrs  = ["203.0.113.0/24"]
   }
 
   assert {
