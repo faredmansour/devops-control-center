@@ -36,8 +36,13 @@ run "creates_nine_separate_workload_security_groups_with_safe_ingress_defaults" 
   }
 
   assert {
-    condition     = length(aws_vpc_security_group_ingress_rule.dcc_control_from_alb) == 1 && length(aws_vpc_security_group_ingress_rule.dcc_control_from_test_worker) == 1
-    error_message = "DCC control ingress must be limited to its ALB and temporary test workers."
+    condition     = length(aws_vpc_security_group_ingress_rule.dcc_control_from_alb) == 1 && length(aws_vpc_security_group_ingress_rule.dcc_control_from_agent) == 1 && length(aws_vpc_security_group_ingress_rule.dcc_control_from_test_worker) == 1
+    error_message = "DCC control ingress must be limited to its ALB, integration agent, and temporary test workers."
+  }
+
+  assert {
+    condition     = aws_vpc_security_group_egress_rule.dcc_agent_to_control.from_port == 8000
+    error_message = "The integration agent must initiate its control channel to DCC; no inbound agent rule is allowed."
   }
 }
 
