@@ -50,6 +50,7 @@ class DiagnosticRunRequestSerializer(StrictSerializer):
     target_task_id = serializers.RegexField(
         regex=r"\A[A-Za-z0-9][A-Za-z0-9._:-]{0,127}\Z",
         max_length=128,
+        required=False,
     )
     limits = DiagnosticRunLimitsSerializer()
 
@@ -63,11 +64,19 @@ class DiagnosticRunRequestSerializer(StrictSerializer):
     def validate(self, attrs):
         test_type = attrs["test_type"]
         environment = attrs["environment"]
-        if test_type == "runtime_health" and not attrs.get("target_task_id"):
-            raise serializers.ValidationError({"target_task_id": "This field is required for runtime health."})
-        if test_type == "ecs_discovery" and any(key in limits for key in ("max_requests", "max_requests_per_second", "max_virtual_users")):
-            raise serializers.ValidationError({"limits": "Load-generation limits are not valid for ECS discovery."})
         limits = attrs["limits"]
+        if test_type == "runtime_health" and not attrs.get("target_task_id"):
+            raise serializers.ValidationError({
+                "target_task_id": "This field is required for runtime health."
+            })
+        if test_type == "ecs_discovery" and any(
+            key in limits for key in (
+                "max_requests", "max_requests_per_second", "max_virtual_users"
+            )
+        ):
+            raise serializers.ValidationError({
+                "limits": "Load-generation limits are not valid for ECS discovery."
+            })
 
         if test_type == "load_test":
             required = {"max_requests", "max_requests_per_second", "max_virtual_users"}
