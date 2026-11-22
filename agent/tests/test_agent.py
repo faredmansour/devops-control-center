@@ -70,6 +70,8 @@ class DiscoveryTests(unittest.TestCase):
         result = discover_ecs(ecs, ("sample-cluster",))
         ecs.describe_clusters.assert_called_once_with(clusters=["sample-cluster"])
         self.assertEqual(result["counts"], {"clusters": 1, "services": 1})
+        self.assertEqual(result["requested_clusters"], 1)
+        self.assertEqual(result["unresolved_clusters"], [])
         self.assertEqual(result["clusters"][0]["services"][0]["name"], "web")
         ecs.describe_services.assert_called_once_with(
             cluster="cluster-arn", services=["service-arn"]
