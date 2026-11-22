@@ -1,6 +1,6 @@
 # Security Groups module
 
-Creates the DCC Test Lab's reusable least-privilege Security Group layer.
+Creates an initial generic Security Group layer for the DCC Test Lab. It is not yet aligned with the Alfredo E-Commerce target application's ports.
 
 ## Security boundaries
 
@@ -26,7 +26,7 @@ All rules are managed exclusively with standalone `aws_vpc_security_group_ingres
 
 ## Important review notes
 
-- DCC Control listens on TCP 8000; the application-under-test API listens on TCP 8080. Confirm these ports against the deployed task/container definitions before apply.
+- DCC Control currently uses TCP 8000. The generic application-under-test API rule currently uses TCP 8080 and its database rule uses PostgreSQL TCP 5432. The reviewed Alfredo E-Commerce backend container exposes TCP 8000 and requires MongoDB TCP 27017. Do not use the current generic rules for E-commerce until the SG module and tests are updated to those confirmed ports and workload boundaries.
 - PostgreSQL and Redis ports are fixed at 5432 and 6379 for this lab design.
 - Optional HTTPS and diagnostic HTTP/HTTPS egress are created only for explicitly supplied destination CIDRs. Empty allowlists create no public egress rules. Prefer VPC endpoints and the narrowest possible destination ranges.
 - Security Groups are stateful; response traffic for permitted connections does not need a reverse rule.
