@@ -23,6 +23,7 @@ run "plans_three_separate_fargate_services_behind_one_alb" {
     ecommerce_backend_image        = "123456789012.dkr.ecr.us-east-1.amazonaws.com/ecommerce:backend-bootstrap"
     mongodb_atlas_secret_arn       = "arn:aws:secretsmanager:us-east-1:123456789012:secret:ecommerce-db"
     jwt_secret_arn                 = "arn:aws:secretsmanager:us-east-1:123456789012:secret:ecommerce-jwt"
+    enable_application_services    = true
     tags                           = { Environment = "test" }
   }
 
