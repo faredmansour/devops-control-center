@@ -130,7 +130,7 @@ The currently implemented seven groups (`alb`, `dcc_control`, `diagnostic_worker
 
 In particular:
 - `test_api` and `test_worker` are generic application-under-test tiers. Their final names and ownership must be aligned with the E-commerce workload once its deployment design is confirmed.
-- The current `database` and `cache` groups describe generic test-target data services; do not assume they are ready to represent the dedicated E-commerce MongoDB boundary without reviewing the module rules.
+- The current `database` SG rules are hard-coded to PostgreSQL TCP 5432 and `test_api` is hard-coded to TCP 8080. The reviewed E-commerce backend listens on TCP 8000 and requires MongoDB TCP 27017. These are material mismatches: the current SG module must be refactored and its tests updated before E-commerce can safely use it.
 - The current ALB-to-DCC path does not establish how E-commerce is exposed to users or how DCC test traffic reaches it.
 - Separate E-commerce frontend/backend/database groups and possibly a separate ALB may be required. Do not add or apply these rules until ports, ingress, and routing are confirmed from the E-commerce deployment design.
 
