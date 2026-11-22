@@ -122,7 +122,8 @@ class ECSDiagnosticExecutionProvider:
                             else []
                         ),
                         *[{"name": name, "value": value}
-                          for name, value in sorted(extra_environment.items())],
+                          for name, value in sorted(extra_environment.items())
+                          if name != "DCC_AGENT_MODE"],
                     ],
                 }]
             },
@@ -149,9 +150,9 @@ class ECSDiagnosticExecutionProvider:
         task_arn = tasks[0].get("taskArn") if tasks else None
         if failures or not task_arn:
             logger.warning(
-                "ECS diagnostic worker launch returned no task (session_id=%s, target_task_id=%s).",
+                "ECS diagnostic worker launch returned no task (session_id=%s, target_task_present=%s).",
                 session_id,
-                target_task_id,
+                bool(target_task_id),
             )
             raise DiagnosticProviderError(
                 "The diagnostic worker could not be started."
