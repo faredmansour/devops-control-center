@@ -129,6 +129,14 @@ resource "aws_ecs_task_definition" "dcc" {
     image     = var.dcc_image
     essential = true
     portMappings = [{ containerPort = 8000, hostPort = 8000, protocol = "tcp" }]
+    environment = [
+      { name = "AWS_REGION", value = var.aws_region },
+      { name = "DJANGO_DEBUG", value = "true" },
+      { name = "DJANGO_ALLOWED_HOSTS", value = "${aws_lb.this.dns_name},localhost,127.0.0.1" },
+      { name = "DCC_CLOUDWATCH_REGION", value = var.aws_region },
+      { name = "DCC_CLOUDWATCH_CLUSTER_NAME", value = aws_ecs_cluster.this.name },
+      { name = "DCC_CLOUDWATCH_SERVICE_NAME", value = "${var.name_prefix}-dcc" }
+    ]
     healthCheck = {
       command     = ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/', timeout=4).read()\""]
       interval    = 30
