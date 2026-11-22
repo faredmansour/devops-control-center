@@ -61,6 +61,16 @@ output "ecr_repository_arn" {
   value       = aws_ecr_repository.test_lab.arn
 }
 
+output "dcc_agent_ecr_repository_url" {
+  description = "Dedicated ECR repository URL for the reusable DCC Agent image."
+  value       = aws_ecr_repository.dcc_agent.repository_url
+}
+
+output "dcc_agent_task_role_arn" {
+  description = "Read-only ECS discovery role attached to one-shot DCC Agent tasks."
+  value       = aws_iam_role.diagnostic_runner_task.arn
+}
+
 output "cloud_map_namespace_id" {
   description = "Private Cloud Map namespace ID."
   value       = aws_service_discovery_private_dns_namespace.test_lab.id
