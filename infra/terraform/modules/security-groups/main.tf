@@ -1,28 +1,25 @@
 locals {
   security_groups = {
     alb = {
-      name        = "alb"
-      description = "Public entry point; ingress is restricted to approved operator CIDRs."
+      description = "HTTPS entry point; ingress is restricted to approved operator CIDRs."
     }
-    application = {
-      name        = "application"
-      description = "Application tasks; accepts traffic only from the ALB."
+    dcc_control = {
+      description = "DCC control-plane API; accepts requests from the ALB and diagnostic workers."
     }
-    worker = {
-      name        = "worker"
-      description = "Background worker tasks; no inbound traffic."
+    diagnostic_worker = {
+      description = "On-demand diagnostic workers; no inbound traffic."
+    }
+    test_api = {
+      description = "Application-under-test API; accepts traffic from DCC control and diagnostic workers."
+    }
+    test_worker = {
+      description = "Background workers for the application under test; no inbound traffic."
     }
     database = {
-      name        = "database"
-      description = "Database tier; accepts PostgreSQL only from application and worker tasks."
+      description = "Database tier; PostgreSQL ingress is limited to test API and test worker."
     }
     cache = {
-      name        = "cache"
-      description = "Cache tier; accepts Redis only from application and worker tasks."
-    }
-    diagnostics = {
-      name        = "diagnostics"
-      description = "On-demand diagnostic tasks; no inbound traffic."
+      description = "Cache tier; Redis ingress is limited to test API and test worker."
     }
   }
 }
@@ -30,15 +27,13 @@ locals {
 resource "aws_security_group" "this" {
   for_each = local.security_groups
 
-  name                   = "${var.name_prefix}-${each.value.name}"
+  name                   = "${var.name_prefix}-${each.key}"
   description            = each.value.description
   vpc_id                 = var.vpc_id
   revoke_rules_on_delete = true
-  ingress                = []
-  egress                 = []
 
   tags = merge(var.tags, {
-    Name = "${var.name_prefix}-${each.value.name}"
+    Name = "${var.name_prefix}-${each.key}"
     Tier = each.key
   })
 }
@@ -54,86 +49,140 @@ resource "aws_vpc_security_group_ingress_rule" "alb_https" {
   ip_protocol       = "tcp"
 }
 
-resource "aws_vpc_security_group_ingress_rule" "application_from_alb" {
-  security_group_id            = aws_security_group.this["application"].id
-  description                  = "Application HTTP traffic from the ALB only."
+resource "aws_vpc_security_group_ingress_rule" "dcc_control_from_alb" {
+  security_group_id            = aws_security_group.this["dcc_control"].id
+  description                  = "DCC control API traffic from the ALB."
   referenced_security_group_id = aws_security_group.this["alb"].id
-  from_port                    = 80
-  to_port                      = 80
+  from_port                    = 8000
+  to_port                      = 8000
   ip_protocol                  = "tcp"
 }
 
-resource "aws_vpc_security_group_ingress_rule" "database_from_application" {
-  for_each = toset(["application", "worker"])
+resource "aws_vpc_security_group_ingress_rule" "dcc_control_from_diagnostic_worker" {
+  security_group_id            = aws_security_group.this["dcc_control"].id
+  description                  = "Signed diagnostic result callbacks from diagnostic workers."
+  referenced_security_group_id = aws_security_group.this["diagnostic_worker"].id
+  from_port                    = 8000
+  to_port                      = 8000
+  ip_protocol                  = "tcp"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "test_api_from_dcc_control" {
+  security_group_id            = aws_security_group.this["test_api"].id
+  description                  = "Scoped test API access from the DCC control plane."
+  referenced_security_group_id = aws_security_group.this["dcc_control"].id
+  from_port                    = 8080
+  to_port                      = 8080
+  ip_protocol                  = "tcp"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "test_api_from_diagnostic_worker" {
+  security_group_id            = aws_security_group.this["test_api"].id
+  description                  = "Diagnostic probes from on-demand diagnostic workers."
+  referenced_security_group_id = aws_security_group.this["diagnostic_worker"].id
+  from_port                    = 8080
+  to_port                      = 8080
+  ip_protocol                  = "tcp"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "database_from_test_workloads" {
+  for_each = toset(["test_api", "test_worker"])
 
   security_group_id            = aws_security_group.this["database"].id
-  description                  = "PostgreSQL from approved workload security groups."
+  description                  = "PostgreSQL only from the test API and test worker."
   referenced_security_group_id = aws_security_group.this[each.value].id
   from_port                    = 5432
   to_port                      = 5432
   ip_protocol                  = "tcp"
 }
 
-resource "aws_vpc_security_group_ingress_rule" "cache_from_application" {
-  for_each = toset(["application", "worker"])
+resource "aws_vpc_security_group_ingress_rule" "cache_from_test_workloads" {
+  for_each = toset(["test_api", "test_worker"])
 
   security_group_id            = aws_security_group.this["cache"].id
-  description                  = "Redis from approved workload security groups."
+  description                  = "Redis only from the test API and test worker."
   referenced_security_group_id = aws_security_group.this[each.value].id
   from_port                    = 6379
   to_port                      = 6379
   ip_protocol                  = "tcp"
 }
 
-resource "aws_vpc_security_group_egress_rule" "alb_to_application" {
+resource "aws_vpc_security_group_egress_rule" "alb_to_dcc_control" {
   security_group_id            = aws_security_group.this["alb"].id
-  description                  = "Forward ALB traffic to the application target port."
-  referenced_security_group_id = aws_security_group.this["application"].id
-  from_port                    = 80
-  to_port                      = 80
+  description                  = "Forward HTTPS listener traffic to the DCC control API."
+  referenced_security_group_id = aws_security_group.this["dcc_control"].id
+  from_port                    = 8000
+  to_port                      = 8000
   ip_protocol                  = "tcp"
 }
 
-resource "aws_vpc_security_group_egress_rule" "application_to_database" {
-  security_group_id            = aws_security_group.this["application"].id
-  description                  = "Application to PostgreSQL."
+resource "aws_vpc_security_group_egress_rule" "dcc_control_to_test_api" {
+  security_group_id            = aws_security_group.this["dcc_control"].id
+  description                  = "DCC control plane to the application-under-test API."
+  referenced_security_group_id = aws_security_group.this["test_api"].id
+  from_port                    = 8080
+  to_port                      = 8080
+  ip_protocol                  = "tcp"
+}
+
+resource "aws_vpc_security_group_egress_rule" "diagnostic_worker_to_dcc_control" {
+  security_group_id            = aws_security_group.this["diagnostic_worker"].id
+  description                  = "Diagnostic worker result callback to DCC control plane."
+  referenced_security_group_id = aws_security_group.this["dcc_control"].id
+  from_port                    = 8000
+  to_port                      = 8000
+  ip_protocol                  = "tcp"
+}
+
+resource "aws_vpc_security_group_egress_rule" "diagnostic_worker_to_test_api" {
+  security_group_id            = aws_security_group.this["diagnostic_worker"].id
+  description                  = "Diagnostic worker probes to the application-under-test API."
+  referenced_security_group_id = aws_security_group.this["test_api"].id
+  from_port                    = 8080
+  to_port                      = 8080
+  ip_protocol                  = "tcp"
+}
+
+resource "aws_vpc_security_group_egress_rule" "test_api_to_database" {
+  security_group_id            = aws_security_group.this["test_api"].id
+  description                  = "Test API to PostgreSQL."
   referenced_security_group_id = aws_security_group.this["database"].id
   from_port                    = 5432
   to_port                      = 5432
   ip_protocol                  = "tcp"
 }
 
-resource "aws_vpc_security_group_egress_rule" "application_to_cache" {
-  security_group_id            = aws_security_group.this["application"].id
-  description                  = "Application to Redis."
+resource "aws_vpc_security_group_egress_rule" "test_api_to_cache" {
+  security_group_id            = aws_security_group.this["test_api"].id
+  description                  = "Test API to Redis."
   referenced_security_group_id = aws_security_group.this["cache"].id
   from_port                    = 6379
   to_port                      = 6379
   ip_protocol                  = "tcp"
 }
 
-resource "aws_vpc_security_group_egress_rule" "worker_to_database" {
-  security_group_id            = aws_security_group.this["worker"].id
-  description                  = "Background worker to PostgreSQL."
+resource "aws_vpc_security_group_egress_rule" "test_worker_to_database" {
+  security_group_id            = aws_security_group.this["test_worker"].id
+  description                  = "Test worker to PostgreSQL."
   referenced_security_group_id = aws_security_group.this["database"].id
   from_port                    = 5432
   to_port                      = 5432
   ip_protocol                  = "tcp"
 }
 
-resource "aws_vpc_security_group_egress_rule" "worker_to_cache" {
-  security_group_id            = aws_security_group.this["worker"].id
-  description                  = "Background worker to Redis."
+resource "aws_vpc_security_group_egress_rule" "test_worker_to_cache" {
+  security_group_id            = aws_security_group.this["test_worker"].id
+  description                  = "Test worker to Redis."
   referenced_security_group_id = aws_security_group.this["cache"].id
   from_port                    = 6379
   to_port                      = 6379
   ip_protocol                  = "tcp"
 }
 
-resource "aws_vpc_security_group_egress_rule" "application_https" {
-  count = var.enable_application_https_egress ? 1 : 0
+resource "aws_vpc_security_group_egress_rule" "dcc_control_https" {
+  count = var.enable_dcc_control_https_egress ? 1 : 0
 
-  security_group_id = aws_security_group.this["application"].id
+  security_group_id = aws_security_group.this["dcc_control"].id
   description       = "Optional outbound HTTPS for external APIs and AWS service endpoints."
   cidr_ipv4         = "0.0.0.0/0"
   from_port         = 443
@@ -141,22 +190,44 @@ resource "aws_vpc_security_group_egress_rule" "application_https" {
   ip_protocol       = "tcp"
 }
 
-resource "aws_vpc_security_group_egress_rule" "worker_https" {
-  count = var.enable_worker_https_egress ? 1 : 0
+resource "aws_vpc_security_group_egress_rule" "diagnostic_worker_https" {
+  count = var.enable_diagnostic_worker_https_egress ? 1 : 0
 
-  security_group_id = aws_security_group.this["worker"].id
-  description       = "Optional outbound HTTPS for external integrations."
+  security_group_id = aws_security_group.this["diagnostic_worker"].id
+  description       = "Optional outbound HTTPS for external diagnostic integrations."
   cidr_ipv4         = "0.0.0.0/0"
   from_port         = 443
   to_port           = 443
   ip_protocol       = "tcp"
 }
 
-resource "aws_vpc_security_group_egress_rule" "diagnostics_http" {
-  for_each = var.enable_diagnostics_http_egress ? toset(["80", "443"]) : toset([])
+resource "aws_vpc_security_group_egress_rule" "test_api_https" {
+  count = var.enable_test_api_https_egress ? 1 : 0
 
-  security_group_id = aws_security_group.this["diagnostics"].id
-  description       = "Optional diagnostic probe traffic to public HTTP/HTTPS endpoints."
+  security_group_id = aws_security_group.this["test_api"].id
+  description       = "Optional outbound HTTPS for application-under-test integrations."
+  cidr_ipv4         = "0.0.0.0/0"
+  from_port         = 443
+  to_port           = 443
+  ip_protocol       = "tcp"
+}
+
+resource "aws_vpc_security_group_egress_rule" "test_worker_https" {
+  count = var.enable_test_worker_https_egress ? 1 : 0
+
+  security_group_id = aws_security_group.this["test_worker"].id
+  description       = "Optional outbound HTTPS for background worker integrations."
+  cidr_ipv4         = "0.0.0.0/0"
+  from_port         = 443
+  to_port           = 443
+  ip_protocol       = "tcp"
+}
+
+resource "aws_vpc_security_group_egress_rule" "diagnostic_worker_http" {
+  for_each = var.enable_diagnostic_public_http_egress ? toset(["80", "443"]) : toset([])
+
+  security_group_id = aws_security_group.this["diagnostic_worker"].id
+  description       = "Optional public HTTP/HTTPS probes for diagnostic jobs."
   cidr_ipv4         = "0.0.0.0/0"
   from_port         = tonumber(each.value)
   to_port           = tonumber(each.value)
