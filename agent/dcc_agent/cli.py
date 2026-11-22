@@ -39,26 +39,29 @@ def main() -> int:
         if config.mode == "discover_ecs":
             inventory = discover_ecs(ecs)
             finished_at = datetime.now(timezone.utc)
-            payload = {
-                "schema_version": 1,
-                "run_id": config.run_id,
-                "test_type": "ecs_discovery",
-                "result_status": "healthy",
-                "summary": (
-                    f"Discovered {inventory['counts']['clusters']} ECS clusters "
-                    f"and {inventory['counts']['services']} ECS services."
-                ),
-                "task_last_status": "UNKNOWN",
-                "task_health_status": "UNKNOWN",
-                "containers": [],
-                "discovery": inventory,
-                "started_at": started_at.isoformat(),
-                "finished_at": finished_at.isoformat(),
-            }
-            post_result(config.callback_url, config.callback_token, payload)
+            if config.callback_url:
+                payload = {
+                    "schema_version": 1,
+                    "run_id": config.run_id,
+                    "test_type": "ecs_discovery",
+                    "result_status": "healthy",
+                    "summary": (
+                        f"Discovered {inventory['counts']['clusters']} ECS clusters "
+                        f"and {inventory['counts']['services']} ECS services."
+                    ),
+                    "task_last_status": "UNKNOWN",
+                    "task_health_status": "UNKNOWN",
+                    "containers": [],
+                    "discovery": inventory,
+                    "started_at": started_at.isoformat(),
+                    "finished_at": finished_at.isoformat(),
+                }
+                post_result(config.callback_url, config.callback_token, payload)
+            else:
+                print(json.dumps(inventory, separators=(",", ":")))
             logger.info(json.dumps({
                 "event": "agent_discovery_finished",
-                "run_id": config.run_id,
+                "run_id": config.run_id or None,
                 "clusters": inventory["counts"]["clusters"],
                 "services": inventory["counts"]["services"],
                 "truncated": inventory["truncated"],
