@@ -36,8 +36,8 @@ output "nat_gateway_id" {
 output "route_table_ids" {
   description = "Route table IDs by subnet tier."
   value = {
-    public             = aws_route_table.public.id
+    public              = aws_route_table.public.id
     private_application = aws_route_table.private_application.id
-    private_data       = aws_route_table.private_data.id
+    private_data        = aws_route_table.private_data.id
   }
 }
