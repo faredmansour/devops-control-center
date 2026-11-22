@@ -233,7 +233,7 @@ resource "aws_ecs_service" "dcc" {
   name                               = "${var.name_prefix}-dcc"
   cluster                            = aws_ecs_cluster.this.id
   task_definition                    = aws_ecs_task_definition.dcc.arn
-  desired_count                      = 1
+  desired_count                      = var.enable_application_services ? 1 : 0
   launch_type                        = "FARGATE"
   deployment_minimum_healthy_percent = 0
   deployment_maximum_percent         = 100
