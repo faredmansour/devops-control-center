@@ -45,30 +45,20 @@ locals {
   }
 }
 
-data "aws_iam_policy_document" "ecs_tasks_trust" {
-  for_each = local.workload_names
-
-  statement {
-    sid     = "AllowEcsTasksAssumeRole"
-    effect  = "Allow"
-    actions = ["sts:AssumeRole"]
-
-    principals {
-      type        = "Service"
-      identifiers = ["ecs-tasks.amazonaws.com"]
-    }
-
-    condition {
-      test     = "StringEquals"
-      variable = "aws:SourceAccount"
-      values   = [var.aws_account_id]
-    }
-
-    condition {
-      test     = "ArnLike"
-      variable = "aws:SourceArn"
-      values   = ["arn:aws:ecs:${var.aws_region}:${var.aws_account_id}:*"]
-    }
+locals {
+  ecs_tasks_trust_policies = {
+    for workload in local.workload_names : workload => jsonencode({
+      Version = "2012-10-17"
+      Statement = [{
+        Effect    = "Allow"
+        Principal = { Service = "ecs-tasks.amazonaws.com" }
+        Action    = "sts:AssumeRole"
+        Condition = {
+          StringEquals = { "aws:SourceAccount" = var.aws_account_id }
+          ArnLike      = { "aws:SourceArn" = "arn:aws:ecs:${var.aws_region}:${var.aws_account_id}:*" }
+        }
+      }]
+    })
   }
 }
 
@@ -76,7 +66,7 @@ resource "aws_iam_role" "execution" {
   for_each = local.workload_names
 
   name                 = "${var.name_prefix}-${each.key}-execution"
-  assume_role_policy   = data.aws_iam_policy_document.ecs_tasks_trust[each.key].json
+  assume_role_policy   = local.ecs_tasks_trust_policies[each.key]
   permissions_boundary = var.permissions_boundary_arn
 
   tags = merge(var.tags, {
@@ -98,7 +88,7 @@ resource "aws_iam_role" "task" {
   for_each = local.workload_names
 
   name                 = "${var.name_prefix}-${each.key}-task"
-  assume_role_policy   = data.aws_iam_policy_document.ecs_tasks_trust[each.key].json
+  assume_role_policy   = local.ecs_tasks_trust_policies[each.key]
   permissions_boundary = var.permissions_boundary_arn
 
   tags = merge(var.tags, {
