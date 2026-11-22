@@ -1,4 +1,4 @@
-"""Small, read-only and bounded ECS inventory discovery."""
+"""Bounded, read-only ECS inventory discovery for explicitly configured clusters."""
 from typing import Any
 
 
@@ -6,27 +6,16 @@ MAX_CLUSTERS = 20
 MAX_SERVICES_PER_CLUSTER = 50
 
 
-def discover_ecs(ecs_client: Any) -> dict[str, Any]:
-    cluster_arns: list[str] = []
-    next_token = None
-
-    while len(cluster_arns) < MAX_CLUSTERS:
-        request: dict[str, Any] = {"maxResults": min(100, MAX_CLUSTERS - len(cluster_arns))}
-        if next_token:
-            request["nextToken"] = next_token
-        response = ecs_client.list_clusters(**request)
-        cluster_arns.extend(response.get("clusterArns", []))
-        next_token = response.get("nextToken")
-        if not next_token:
-            break
-    truncated = bool(next_token or len(cluster_arns) > MAX_CLUSTERS)
-    cluster_arns = cluster_arns[:MAX_CLUSTERS]
+def discover_ecs(ecs_client: Any, cluster_identifiers: tuple[str, ...]) -> dict[str, Any]:
+    if not cluster_identifiers or len(cluster_identifiers) > MAX_CLUSTERS:
+        raise ValueError("ECS discovery requires between 1 and 20 configured clusters.")
 
     clusters: list[dict[str, Any]] = []
-    for offset in range(0, len(cluster_arns), 100):
+    truncated = False
+
+    for offset in range(0, len(cluster_identifiers), 100):
         response = ecs_client.describe_clusters(
-            clusters=cluster_arns[offset:offset + 100],
-            include=["STATISTICS", "TAGS"],
+            clusters=list(cluster_identifiers[offset:offset + 100])
         )
         for cluster in response.get("clusters", []):
             clusters.append({
@@ -85,8 +74,8 @@ def discover_ecs(ecs_client: Any) -> dict[str, Any]:
         },
         "clusters": clusters,
         "limitations": [
+            "Discovery is restricted to the cluster allowlist supplied at task launch.",
             "This initial agent release discovers ECS clusters and services only.",
             "It does not discover ALB, VPC, RDS, ECR, IAM, or CloudWatch resources yet.",
-            "Discovery is read-only and is performed only when explicitly invoked.",
         ],
     }
