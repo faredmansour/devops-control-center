@@ -58,3 +58,46 @@ resource "aws_ecr_lifecycle_policy" "test_lab" {
     ]
   })
 }
+
+resource "aws_ecr_repository" "dcc_agent" {
+  name                 = "dcc-agent"
+  image_tag_mutability = "IMMUTABLE"
+  force_delete         = false
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  encryption_configuration {
+    encryption_type = "AES256"
+  }
+
+  tags = {
+    Name        = "dcc-agent"
+    Project     = "DCC"
+    Environment = "diagnostic-agent"
+    ManagedBy   = "IaC"
+    Purpose     = "reusable-dcc-agent-image"
+  }
+}
+
+resource "aws_ecr_lifecycle_policy" "dcc_agent" {
+  repository = aws_ecr_repository.dcc_agent.name
+
+  policy = jsonencode({
+    rules = [
+      {
+        rulePriority = 1
+        description  = "Retain the latest 10 immutable agent images."
+        selection = {
+          tagStatus   = "any"
+          countType   = "imageCountMoreThan"
+          countNumber = 10
+        }
+        action = {
+          type = "expire"
+        }
+      }
+    ]
+  })
+}
