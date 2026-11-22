@@ -115,12 +115,6 @@ variable "diagnostic_public_http_egress_cidrs" {
   default     = []
 }
 
-variable "iam_ecr_repository_arns" {
-  description = "ECR repository ARNs allowed for each workload execution role."
-  type        = map(list(string))
-  default     = {}
-}
-
 variable "iam_log_group_arns" {
   description = "CloudWatch log group ARNs allowed for each workload execution role."
   type        = map(list(string))
