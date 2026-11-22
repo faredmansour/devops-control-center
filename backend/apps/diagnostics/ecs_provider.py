@@ -84,7 +84,7 @@ class ECSDiagnosticExecutionProvider:
         if target_task_id is not None and not is_valid_task_id(target_task_id):
             raise DiagnosticProviderError("The diagnostic target task ID is invalid.")
         self._validate_task_definition()
-        allowed_extra_names = {"DCC_AGENT_MODE", "DCC_RESULT_CALLBACK_URL", "DCC_RESULT_CALLBACK_TOKEN"}
+        allowed_extra_names = {"DCC_AGENT_MODE", "DCC_DISCOVERY_CLUSTERS", "DCC_RESULT_CALLBACK_URL", "DCC_RESULT_CALLBACK_TOKEN"}
         extra_environment = extra_environment or {}
         if (set(extra_environment).difference(allowed_extra_names)
                 or any(not isinstance(value, str) or not value or len(value) > 4096
@@ -123,7 +123,7 @@ class ECSDiagnosticExecutionProvider:
                         ),
                         *[{"name": name, "value": value}
                           for name, value in sorted(extra_environment.items())
-                          if name != "DCC_AGENT_MODE"],
+                          if name not in {"DCC_AGENT_MODE", "AWS_REGION"}],
                     ],
                 }]
             },
