@@ -132,6 +132,7 @@ class ECSDiagnosticExecutionProviderTests(TestCase):
             None,
             extra_environment={
                 "DCC_AGENT_MODE": "discover_ecs",
+                "DCC_DISCOVERY_CLUSTERS": "sample-cluster",
                 "DCC_RESULT_CALLBACK_URL": "https://dcc.internal/result/",
                 "DCC_RESULT_CALLBACK_TOKEN": "signed-token",
             },
@@ -147,6 +148,10 @@ class ECSDiagnosticExecutionProviderTests(TestCase):
             environment,
         )
         self.assertNotIn("TARGET_TASK_ID", names)
+        self.assertIn(
+            {"name": "DCC_DISCOVERY_CLUSTERS", "value": "sample-cluster"},
+            environment,
+        )
 
     def test_start_rejects_missing_task_arn(self) -> None:
         self.client.run_task.return_value = {"tasks": [], "failures": []}
