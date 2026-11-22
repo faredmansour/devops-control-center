@@ -75,6 +75,15 @@ resource "aws_vpc_security_group_ingress_rule" "dcc_control_from_alb" {
   ip_protocol                  = "tcp"
 }
 
+resource "aws_vpc_security_group_ingress_rule" "dcc_control_from_agent" {
+  security_group_id            = aws_security_group.this["dcc_control"].id
+  description                  = "Authenticated integration-agent requests to DCC control."
+  referenced_security_group_id = aws_security_group.this["dcc_agent"].id
+  from_port                    = 8000
+  to_port                      = 8000
+  ip_protocol                  = "tcp"
+}
+
 resource "aws_vpc_security_group_ingress_rule" "dcc_control_from_test_worker" {
   security_group_id            = aws_security_group.this["dcc_control"].id
   description                  = "Test-worker result callbacks to DCC control."
@@ -171,6 +180,15 @@ resource "aws_vpc_security_group_egress_rule" "ecommerce_backend_to_cache" {
   referenced_security_group_id = aws_security_group.this["cache"].id
   from_port                    = 6379
   to_port                      = 6379
+  ip_protocol                  = "tcp"
+}
+
+resource "aws_vpc_security_group_egress_rule" "dcc_agent_to_control" {
+  security_group_id            = aws_security_group.this["dcc_agent"].id
+  description                  = "Agent-initiated authenticated communication to the DCC control API."
+  referenced_security_group_id = aws_security_group.this["dcc_control"].id
+  from_port                    = 8000
+  to_port                      = 8000
   ip_protocol                  = "tcp"
 }
 
