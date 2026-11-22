@@ -230,11 +230,11 @@ resource "aws_ecs_task_definition" "ecommerce_backend" {
 }
 
 resource "aws_ecs_service" "dcc" {
-  name            = "${var.name_prefix}-dcc"
-  cluster         = aws_ecs_cluster.this.id
-  task_definition = aws_ecs_task_definition.dcc.arn
-  desired_count   = 1
-  launch_type     = "FARGATE"
+  name                               = "${var.name_prefix}-dcc"
+  cluster                            = aws_ecs_cluster.this.id
+  task_definition                    = aws_ecs_task_definition.dcc.arn
+  desired_count                      = 1
+  launch_type                        = "FARGATE"
   deployment_minimum_healthy_percent = 0
   deployment_maximum_percent         = 100
   network_configuration {
@@ -252,11 +252,11 @@ resource "aws_ecs_service" "dcc" {
 }
 
 resource "aws_ecs_service" "ecommerce_frontend" {
-  name            = "${var.name_prefix}-ecommerce-web"
-  cluster         = aws_ecs_cluster.this.id
-  task_definition = aws_ecs_task_definition.ecommerce_frontend.arn
-  desired_count   = 1
-  launch_type     = "FARGATE"
+  name                               = "${var.name_prefix}-ecommerce-web"
+  cluster                            = aws_ecs_cluster.this.id
+  task_definition                    = aws_ecs_task_definition.ecommerce_frontend.arn
+  desired_count                      = 1
+  launch_type                        = "FARGATE"
   deployment_minimum_healthy_percent = 0
   deployment_maximum_percent         = 100
   network_configuration {
