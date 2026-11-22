@@ -1648,6 +1648,71 @@ class StatelessRunAPITests(SimpleTestCase):
         )
         self.assertTrue(kwargs["runner_environment"]["DCC_RESULT_CALLBACK_TOKEN"])
 
+    @patch("apps.diagnostics.views.uuid4")
+    @patch("apps.diagnostics.views._lifecycle")
+    def test_discovery_callback_is_accepted_and_exposed_in_run_result(
+        self, lifecycle_factory, uuid_factory
+    ):
+        uuid_factory.return_value = self.RUN_ID
+        lifecycle_factory.return_value = self.lifecycle
+        created = self.client.post(
+            "/api/diagnostic-sessions/runs/",
+            {
+                "schema_version": 1,
+                "test_type": "ecs_discovery",
+                "environment": "staging",
+                "limits": {"max_duration_seconds": 120},
+            },
+            format="json",
+        )
+        self.assertEqual(created.status_code, 201, created.data)
+        callback_token = self.lifecycle.start.call_args.kwargs[
+            "runner_environment"
+        ]["DCC_RESULT_CALLBACK_TOKEN"]
+
+        callback = self.client.post(
+            f"/api/diagnostic-sessions/runs/{self.RUN_ID}/result/",
+            {
+                "schema_version": 1,
+                "run_id": self.RUN_ID,
+                "test_type": "ecs_discovery",
+                "result_status": "healthy",
+                "summary": "Discovered 1 ECS cluster and 1 service.",
+                "discovery": {
+                    "schema_version": 1,
+                    "provider": "aws",
+                    "discovery_scope": ["ecs.clusters", "ecs.services"],
+                    "truncated": False,
+                    "counts": {"clusters": 1, "services": 1},
+                    "clusters": [{
+                        "arn": "arn:aws:ecs:us-east-1:123456789012:cluster/sample",
+                        "name": "sample",
+                        "status": "ACTIVE",
+                        "services": [{
+                            "arn": "arn:aws:ecs:us-east-1:123456789012:service/sample/web",
+                            "name": "web",
+                            "status": "ACTIVE",
+                        }],
+                    }],
+                },
+                "started_at": "2026-11-22T12:00:00Z",
+                "finished_at": "2026-11-22T12:00:01Z",
+            },
+            format="json",
+            HTTP_X_DCC_RESULT_TOKEN=callback_token,
+        )
+        self.assertEqual(callback.status_code, 202, callback.data)
+
+        result = self.client.get(
+            f"/api/diagnostic-sessions/runs/{self.RUN_ID}/",
+            HTTP_X_DCC_RUN_TOKEN=created.data["capability_token"],
+        )
+        self.assertEqual(result.status_code, 200, result.data)
+        self.assertEqual(result.data["status"], "completed")
+        self.assertEqual(
+            result.data["result"]["discovery"]["counts"]["services"], 1
+        )
+
     @patch("apps.diagnostics.views._lifecycle")
     def test_status_uses_signed_capability_and_ecs(self, lifecycle_factory):
         lifecycle_factory.return_value = self.lifecycle
