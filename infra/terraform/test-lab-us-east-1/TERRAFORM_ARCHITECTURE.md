@@ -94,7 +94,7 @@ Do not create empty module directories just to make the tree look complete. Add 
 | diagnostic-runner | temporary test task definitions and execution configuration | permanent application lifecycle |
 | root | composition, environment values, outputs | detailed resource implementation |
 
-## 6. IAM workload identity design (planning)
+## 6. IAM workload identity design (implemented baseline)
 
 IAM roles must be designed per workload, not shared across the entire lab:
 
@@ -107,7 +107,7 @@ IAM roles must be designed per workload, not shared across the entire lab:
 | DCC Agent role/identity | Authenticate to DCC and perform only its approved integration actions; AWS permissions only if a concrete feature requires them | No broad account discovery or administrative access by default |
 | Test Worker role | Read-only discovery/test permissions scoped to approved resources and the test session | No application deployment, IAM mutation, or unrestricted infrastructure changes |
 
-Repository review confirms the E-commerce stack is React/Vite + Node.js/Express 5 + MongoDB/Mongoose, with Redis and Cloudinary as optional integrations. The current Compose file points `DB_URL` to `mongodb://host.docker.internal:27017/e-commerce` but does not define a MongoDB service. It also builds the frontend with `VITE_API_URL=http://localhost:8000/api`, which is a local-development value and must be replaced at build time for the AWS URL/routing design. The Compose file publishes Redis on the host and configures it as a cache; production network exposure must instead be private and SG-scoped. The Render blueprint's frontend `rootDir` is `frontend final project`, while the repository directory is `frontend`; do not rely on that blueprint as-is for AWS deployment. The AWS staging design must inject the Atlas `DB_URL` through AWS Secrets Manager (or an equivalently protected secret mechanism), with no URI committed to Git or baked into images. The final policies depend on source-code review and the selected execution model. Use separate task roles even when two containers happen to run in one ECS task. Prefer short-lived credentials, scoped resource ARNs, and explicit trust relationships. Do not create the IAM module until the required API actions, resource scopes, and trust principals have been documented and reviewed.
+Repository review confirms the E-commerce stack is React/Vite + Node.js/Express 5 + MongoDB/Mongoose, with Redis and Cloudinary as optional integrations. The current Compose file points `DB_URL` to `mongodb://host.docker.internal:27017/e-commerce` but does not define a MongoDB service. It also builds the frontend with `VITE_API_URL=http://localhost:8000/api`, which is a local-development value and must be replaced at build time for the AWS URL/routing design. The Compose file publishes Redis on the host and configures it as a cache; production network exposure must instead be private and SG-scoped. The Render blueprint's frontend `rootDir` is `frontend final project`, while the repository directory is `frontend`; do not rely on that blueprint as-is for AWS deployment. The AWS staging design must inject the Atlas `DB_URL` through AWS Secrets Manager (or an equivalently protected secret mechanism), with no URI committed to Git or baked into images. The final policies depend on source-code review and the selected execution model. Use separate task roles even when two containers happen to run in one ECS task. Prefer short-lived credentials, scoped resource ARNs, and explicit trust relationships. The initial reusable IAM module now creates separate ECS execution and task roles for DCC, E-commerce, the Agent, and Test Workers. Execution-role policies are parameterized by workload-specific ECR repository ARNs, CloudWatch log group ARNs, Secrets Manager secret ARNs, and optional KMS key ARNs. Application task roles are empty by default. DCC test-worker orchestration is disabled by default and can be enabled only when exact task-definition, cluster, task-resource, and worker role ARNs are supplied. This is a least-privilege baseline; further permissions such as EC2 discovery, S3 inventory, CloudWatch metrics, and other integrations remain excluded until source-code/API requirements and resource scopes are confirmed.
 
 ## 7. Network and security boundaries
 
@@ -126,13 +126,13 @@ Repository review confirms the E-commerce stack is React/Vite + Node.js/Express 
 
 ## 8. Current Security Groups interpretation
 
-The currently implemented seven groups (`alb`, `dcc_control`, `diagnostic_worker`, `test_api`, `test_worker`, `database`, `cache`) are an initial generic policy layer, not yet a complete proof of the final two-application topology.
+The implemented Security Groups module now creates nine groups: `dcc_alb`, `ecommerce_alb`, `dcc_control`, `dcc_agent`, `diagnostic_worker`, `ecommerce_frontend`, `ecommerce_backend`, `test_worker`, and `cache`.
 
 In particular:
-- `test_api` and `test_worker` are generic application-under-test tiers. Their final names and ownership must be aligned with the E-commerce workload once its deployment design is confirmed.
-- The current `database` SG rules are hard-coded to PostgreSQL TCP 5432 and `test_api` is hard-coded to TCP 8080. The reviewed E-commerce backend listens on TCP 8000 and requires MongoDB TCP 27017. These are material mismatches: the current SG module must be refactored and its tests updated before E-commerce can safely use it.
-- The current ALB-to-DCC path does not establish how E-commerce is exposed to users or how DCC test traffic reaches it.
-- Separate E-commerce frontend/backend/database groups and possibly a separate ALB may be required. Do not add or apply these rules until ports, ingress, and routing are confirmed from the E-commerce deployment design.
+- The E-commerce frontend is expected on TCP 80 behind its own ALB; its Express backend is expected on TCP 8000. Diagnostic and test workers have SG-referenced paths to the backend.
+- MongoDB Atlas is external to the VPC. The backend alone receives its connection secret. TCP 27017 egress is limited to that port, while Atlas IP Access List must restrict the source to the NAT Gateway Elastic IP. This public-connectivity exception remains a pre-apply review item.
+- The DCC Agent has an outbound-initiated TCP 8000 path to DCC Control and no inbound SG rules. Application-level authentication is still required.
+- ALB listeners, certificates, target groups, DNS, and final ingress CIDRs remain separate deployment work.
 
 ## 9. State and regional isolation
 
@@ -158,7 +158,7 @@ In particular:
 | 2 | Initial Security Groups module | fmt, validate, mocked policy tests, traffic matrix review |
 | 3 | E-commerce source/deployment review | Repository and stack confirmed; replace local Compose MongoDB dependency with Atlas secret injection and correct frontend API URL configuration |
 | 4 | Final network/SG topology | Confirm ingress/routing, agent and test-worker paths, NAT EIP or Atlas PrivateLink connectivity, and narrowly scoped Atlas access |
-| 5 | IAM design and module | Trust-policy and least-privilege review for every workload |
+| 5 | IAM module baseline | Separate execution/task roles, scoped ECR/log/secret inputs, optional worker orchestration; add feature-specific policies only after source review |
 | 6 | ECR and image build/push | Immutable image digests exist in us-east-1 |
 | 7 | E-commerce deployment | Frontend/API/MongoDB connectivity healthy and isolated |
 | 8 | DCC deployment and integration image | DCC can securely register/reach the target |
@@ -174,4 +174,4 @@ Each stage should be a small reviewable commit. A successful DCC deployment alon
 
 ## 13. Current implementation status
 
-The reusable Network module and the us-east-1 root composition are present. The reusable Security Groups module is composed into that root and currently defines seven initial workload tiers with no public ingress by default and explicit destination CIDR allowlists for optional public egress. Historical CI runs reported the Network and mocked Security Groups tests passing; check the latest workflow run before relying on that status. These modules and CI checks do not create AWS resources. The seven-group policy is an initial baseline and must be reconciled with the final E-commerce topology. IAM, E-commerce infrastructure, DCC Agent deployment, and temporary test-worker infrastructure remain design/implementation work. No `terraform apply` is authorized by this document.
+The reusable Network, Security Groups, and IAM modules are composed into the us-east-1 root. The Security Groups module defines nine workload tiers; the IAM module creates eight isolated ECS roles (four execution roles and four task roles). Mocked IAM tests are included in the Terraform workflow. Confirm the latest workflow result before treating formatting, validation, and tests as passed. The IAM baseline does not yet grant application task permissions for EC2 discovery, S3 inventory, CloudWatch metrics, or ECS worker orchestration. E-commerce infrastructure, ECR repositories, ALBs/listeners, DCC Agent deployment, and temporary test-worker infrastructure remain to be implemented. No `terraform apply` is authorized by this document.
