@@ -37,7 +37,7 @@ def main() -> int:
         ecs = _aws_client("ecs", config.region)
         started_at = datetime.now(timezone.utc)
         if config.mode == "discover_ecs":
-            inventory = discover_ecs(ecs)
+            inventory = discover_ecs(ecs, config.discovery_clusters)
             finished_at = datetime.now(timezone.utc)
             if config.callback_url:
                 payload = {
