@@ -28,6 +28,15 @@ private_data_subnet_cidrs = [
 
 enable_nat_gateway = true
 
+# Restrict this to your current public IPv4 address, e.g. ["203.0.113.10/32"].
+# Leave empty to keep the ALB unreachable from the public internet.
+alb_ingress_cidrs = []
+
+# These immutable image tags must exist in the regional ECR repository before ECS tasks can start.
+dcc_image_tag = "bootstrap"
+ecommerce_frontend_image_tag = "frontend-bootstrap"
+ecommerce_backend_image_tag = "backend-bootstrap"
+
 common_tags = {
   Owner = "replace-with-owner"
 }
