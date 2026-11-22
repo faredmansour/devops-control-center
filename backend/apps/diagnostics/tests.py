@@ -19,6 +19,7 @@ from apps.diagnostics.ecs_provider import (
 )
 from apps.diagnostics.impact import DiagnosticImpactService
 from apps.diagnostics.models import DiagnosticSession, ExecutionReference
+from apps.diagnostics.result_store import clear_results
 from apps.diagnostics.providers import (
     DiagnosticProviderError,
     InMemoryDiagnosticExecutionProvider,
@@ -1573,6 +1574,8 @@ class StatelessRunAPITests(SimpleTestCase):
     )
 
     def setUp(self):
+        clear_results()
+        self.addCleanup(clear_results)
         self.client = APIClient()
         self.discovery_patcher = patch(
             "apps.diagnostics.views.get_ecs_discovery_provider"
