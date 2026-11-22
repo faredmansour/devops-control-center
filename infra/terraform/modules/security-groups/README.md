@@ -1,38 +1,42 @@
 # Security Groups module
 
-Creates an initial generic Security Group layer for the DCC Test Lab. It is not yet aligned with the Alfredo E-Commerce target application's ports. MongoDB Atlas is the approved managed E-commerce database and is external to this VPC; it does not get an AWS Security Group.
+Creates separate AWS Security Groups for the DCC control plane, reusable agent, temporary workers, and the E-commerce target. MongoDB Atlas is the approved managed E-commerce database and is external to this VPC; it does not get an AWS Security Group.
 
-## Security boundaries
+## Workload traffic matrix
 
-| Group | Inbound | Outbound |
-|---|---|---|
-| ALB | TCP 443 from explicitly approved operator/VPN CIDRs | TCP 8000 to DCC Control |
-| DCC Control | TCP 8000 from ALB and Diagnostic Worker | TCP 8080 to Test API; optional HTTPS |
-| Diagnostic Worker | None | TCP 8000 to DCC Control; TCP 8080 to Test API; optional HTTP/HTTPS probes and HTTPS |
-| Test API | TCP 8080 from DCC Control and Diagnostic Worker | PostgreSQL 5432, Redis 6379; optional HTTPS |
-| Test Worker | None | PostgreSQL 5432, Redis 6379; optional HTTPS |
-| Database | PostgreSQL 5432 from Test API and Test Worker | No explicit egress rules |
-| Cache | Redis 6379 from Test API and Test Worker | No explicit egress rules |
+| Source | Destination | Protocol/port | Purpose |
+|---|---|---:|---|
+| Approved operator/VPN CIDRs | DCC ALB | TCP 443 | Restricted DCC UI/API entry |
+| Approved client CIDRs | E-commerce ALB | TCP 443 | E-commerce public entry; empty by default |
+| DCC ALB | DCC Control | TCP 8000 | DCC API |
+| E-commerce ALB | E-commerce Frontend | TCP 80 | Nginx frontend |
+| E-commerce Frontend | E-commerce Backend | TCP 8000 | Frontend reverse proxy to Express API |
+| Diagnostic Worker | E-commerce Backend | TCP 8000 | Diagnostic/API probes |
+| Test Worker | E-commerce Backend | TCP 8000 | Authorized test execution |
+| Test Worker | DCC Control | TCP 8000 | Test lifecycle/result callbacks |
+| E-commerce Backend | MongoDB Atlas | TCP 27017 | TLS database connection; Atlas IP Access List is the remote allowlist |
+| E-commerce Backend | Optional Redis Cache | TCP 6379 | Private cache access |
 
-All rules are managed exclusively with standalone `aws_vpc_security_group_ingress_rule` and `aws_vpc_security_group_egress_rule` resources. The `aws_security_group` resources intentionally do not declare inline `ingress` or `egress` arguments. This avoids mixing the two rule-management models and preserves a single Terraform owner for each rule.
+The module creates nine groups: `dcc_alb`, `ecommerce_alb`, `dcc_control`, `dcc_agent`, `diagnostic_worker`, `ecommerce_frontend`, `ecommerce_backend`, `test_worker`, and `cache`.
 
-## Safe defaults
+## Security defaults and limitations
 
-- `operator_ingress_cidrs = []`: the ALB has no inbound rule until approved CIDRs are supplied.
-- All public egress destination CIDR allowlists default to empty.
-- Database and cache have no public ingress and no explicit egress rules.
-- No SSH/RDP ingress is created.
-- HTTP/80 is not exposed on the ALB. If needed, add it only with a separately implemented and reviewed HTTP-to-HTTPS redirect listener.
+- DCC operator ingress and E-commerce ingress are independent CIDR allowlists. Both default to empty.
+- No SSH/RDP ingress is created. No direct public ingress exists for application tasks, agent, workers, or cache.
+- The DCC Agent has no inbound rules. Its exact authenticated communication path is still to be finalized; this module does not yet authorize a control-plane connection for the agent.
+- MongoDB Atlas is external to the VPC. Only the E-commerce backend should receive the Atlas connection secret. Require TLS and restrict Atlas Network Access/IP Access List to the NAT Gateway Elastic IP (or use PrivateLink after a separate design review).
+- Public Atlas connectivity requires backend egress on TCP 27017. Because Atlas endpoint IPs can change and Security Groups do not support FQDN allowlists, this rule currently uses `0.0.0.0/0` on **only TCP 27017**. Atlas IP Access List and the stable NAT EIP provide the remote restriction. This is an explicit, documented exception—not unrestricted all-port egress. If a stricter network boundary is required, evaluate Atlas PrivateLink or maintained destination prefix lists before apply.
+- Redis is optional and private; it accepts connections only from the E-commerce backend.
+- This module does not create ALBs/listeners, TLS certificates, Atlas users/clusters/IP allowlist entries, secrets, Redis resources, or application-level authorization.
+- Security Groups are stateful. Rules are managed only through standalone `aws_vpc_security_group_ingress_rule` and `aws_vpc_security_group_egress_rule` resources, not inline rules.
 
-## Important review notes
+## Validation
 
-- DCC Control currently uses TCP 8000. The generic application-under-test API rule currently uses TCP 8080 and its database rule uses PostgreSQL TCP 5432. The reviewed Alfredo E-Commerce backend container exposes TCP 8000 and connects to MongoDB Atlas over TCP 27017/TLS. Do not use the current generic rules for E-commerce until the SG module and tests are updated to the confirmed application ports and workload boundaries. Atlas is external to the VPC: secure it with Atlas IP Access List + TLS and a backend-only secret. The AWS egress design (stable NAT EIP vs PrivateLink) is still to be selected.
-- The current generic PostgreSQL and Redis rules use ports 5432 and 6379; these are not MongoDB Atlas rules.
-- Optional HTTPS and diagnostic HTTP/HTTPS egress are created only for explicitly supplied destination CIDRs. Empty allowlists create no public egress rules. Prefer VPC endpoints and the narrowest possible destination ranges.
-- Security Groups are stateful; response traffic for permitted connections does not need a reverse rule.
-- DNS resolver access is governed by the VPC resolver behavior and cannot be controlled with ordinary SG rules targeting the AmazonProvidedDNS address.
-- These rules do not configure TLS certificates, ALB listeners, database authentication, Redis authentication, secrets, or application-level authorization.
+The Terraform native tests use a mocked AWS provider and do not create AWS resources:
 
-## Usage
+```bash
+terraform init -backend=false
+terraform test
+```
 
-The regional root passes the Network module's VPC ID and common tags. Workload modules consume the exported SG IDs.
+Review the full plan and actual workload ports before any apply.
