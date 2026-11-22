@@ -1,6 +1,6 @@
 # Security Groups module
 
-Creates an initial generic Security Group layer for the DCC Test Lab. It is not yet aligned with the Alfredo E-Commerce target application's ports.
+Creates an initial generic Security Group layer for the DCC Test Lab. It is not yet aligned with the Alfredo E-Commerce target application's ports. MongoDB Atlas is the approved managed E-commerce database and is external to this VPC; it does not get an AWS Security Group.
 
 ## Security boundaries
 
@@ -26,8 +26,8 @@ All rules are managed exclusively with standalone `aws_vpc_security_group_ingres
 
 ## Important review notes
 
-- DCC Control currently uses TCP 8000. The generic application-under-test API rule currently uses TCP 8080 and its database rule uses PostgreSQL TCP 5432. The reviewed Alfredo E-Commerce backend container exposes TCP 8000 and requires MongoDB TCP 27017. Do not use the current generic rules for E-commerce until the SG module and tests are updated to those confirmed ports and workload boundaries.
-- PostgreSQL and Redis ports are fixed at 5432 and 6379 for this lab design.
+- DCC Control currently uses TCP 8000. The generic application-under-test API rule currently uses TCP 8080 and its database rule uses PostgreSQL TCP 5432. The reviewed Alfredo E-Commerce backend container exposes TCP 8000 and connects to MongoDB Atlas over TCP 27017/TLS. Do not use the current generic rules for E-commerce until the SG module and tests are updated to the confirmed application ports and workload boundaries. Atlas is external to the VPC: secure it with Atlas IP Access List + TLS and a backend-only secret. The AWS egress design (stable NAT EIP vs PrivateLink) is still to be selected.
+- The current generic PostgreSQL and Redis rules use ports 5432 and 6379; these are not MongoDB Atlas rules.
 - Optional HTTPS and diagnostic HTTP/HTTPS egress are created only for explicitly supplied destination CIDRs. Empty allowlists create no public egress rules. Prefer VPC endpoints and the narrowest possible destination ranges.
 - Security Groups are stateful; response traffic for permitted connections does not need a reverse rule.
 - DNS resolver access is governed by the VPC resolver behavior and cannot be controlled with ordinary SG rules targeting the AmazonProvidedDNS address.
