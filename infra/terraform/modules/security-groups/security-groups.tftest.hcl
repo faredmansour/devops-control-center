@@ -21,7 +21,7 @@ run "creates_nine_separate_workload_security_groups_with_safe_ingress_defaults" 
   }
 
   assert {
-    condition     = length(aws_vpc_security_group_ingress_rule.ecommerce_backend_from_frontend) == 1 && length(aws_vpc_security_group_ingress_rule.ecommerce_backend_from_diagnostic_worker) == 1 && length(aws_vpc_security_group_ingress_rule.ecommerce_backend_from_test_worker) == 1
+    condition     = aws_vpc_security_group_ingress_rule.ecommerce_backend_from_frontend.from_port == 8000 && aws_vpc_security_group_ingress_rule.ecommerce_backend_from_diagnostic_worker.from_port == 8000 && aws_vpc_security_group_ingress_rule.ecommerce_backend_from_test_worker.from_port == 8000
     error_message = "The E-commerce API must accept traffic only from the frontend and approved temporary workers."
   }
 
@@ -31,12 +31,12 @@ run "creates_nine_separate_workload_security_groups_with_safe_ingress_defaults" 
   }
 
   assert {
-    condition     = length(aws_vpc_security_group_ingress_rule.cache_from_ecommerce_backend) == 1
+    condition     = aws_vpc_security_group_ingress_rule.cache_from_ecommerce_backend.from_port == 6379
     error_message = "The optional cache must accept connections only from the E-commerce backend."
   }
 
   assert {
-    condition     = length(aws_vpc_security_group_ingress_rule.dcc_control_from_alb) == 1 && length(aws_vpc_security_group_ingress_rule.dcc_control_from_agent) == 1 && length(aws_vpc_security_group_ingress_rule.dcc_control_from_test_worker) == 1
+    condition     = aws_vpc_security_group_ingress_rule.dcc_control_from_alb.from_port == 8000 && aws_vpc_security_group_ingress_rule.dcc_control_from_agent.from_port == 8000 && aws_vpc_security_group_ingress_rule.dcc_control_from_test_worker.from_port == 8000
     error_message = "DCC control ingress must be limited to its ALB, integration agent, and temporary test workers."
   }
 
