@@ -111,7 +111,7 @@ class ECSStatelessJobLifecycle:
     def start(
         self,
         run_id: str,
-        target_task_id: str,
+        target_task_id: str | None,
         target_cluster_arn: str | None = None,
         max_duration_seconds: int | None = None,
         runner_environment: dict[str, str] | None = None,
