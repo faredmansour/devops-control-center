@@ -49,6 +49,24 @@ The private application tier uses one NAT Gateway when `enable_nat_gateway = tru
 
 All subnet CIDRs are ordered to correspond to the two selected AZs. VPC lifecycle preconditions stop planning/applying when fewer than two AZs are available, an explicitly configured AZ is unavailable, a subnet falls outside the VPC, or subnet ranges overlap. These are blocking preconditions rather than warning-only `check` assertions.
 
+## Automated tests
+
+The module includes a Terraform native test suite in `network.tftest.hcl`. It uses a mocked AWS provider, so the tests do not create AWS resources or require AWS credentials.
+
+The suite covers:
+
+- A valid, contained, non-overlapping subnet layout.
+- A subnet CIDR outside the VPC range.
+- Overlapping subnet CIDRs.
+- An explicitly configured Availability Zone that is unavailable.
+
+Run the suite from this directory:
+
+```bash
+terraform init -backend=false
+terraform test
+```
+
 ## Outputs
 
 - `vpc_id`, `vpc_cidr`
