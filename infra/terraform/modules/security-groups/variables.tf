@@ -19,20 +19,32 @@ variable "operator_ingress_cidrs" {
   }
 }
 
-variable "enable_application_https_egress" {
-  description = "Allow application tasks to make outbound HTTPS requests to any IPv4 destination."
+variable "enable_dcc_control_https_egress" {
+  description = "Allow the DCC control plane outbound HTTPS to public IPv4 destinations."
   type        = bool
   default     = false
 }
 
-variable "enable_worker_https_egress" {
-  description = "Allow worker tasks to make outbound HTTPS requests to any IPv4 destination."
+variable "enable_diagnostic_worker_https_egress" {
+  description = "Allow diagnostic workers outbound HTTPS to public IPv4 destinations."
   type        = bool
   default     = false
 }
 
-variable "enable_diagnostics_http_egress" {
-  description = "Allow diagnostic tasks to probe public HTTP and HTTPS endpoints."
+variable "enable_test_api_https_egress" {
+  description = "Allow the application-under-test API outbound HTTPS to public IPv4 destinations."
+  type        = bool
+  default     = false
+}
+
+variable "enable_test_worker_https_egress" {
+  description = "Allow test workers outbound HTTPS to public IPv4 destinations."
+  type        = bool
+  default     = false
+}
+
+variable "enable_diagnostic_public_http_egress" {
+  description = "Allow diagnostic workers public HTTP/HTTPS probes to IPv4 destinations."
   type        = bool
   default     = false
 }
