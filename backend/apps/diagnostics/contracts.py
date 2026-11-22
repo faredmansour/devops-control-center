@@ -9,6 +9,7 @@ from rest_framework import serializers
 RUN_SCHEMA_VERSION = 1
 RUN_TYPES = (
     "runtime_health",
+    "ecs_discovery",
     "api_smoke",
     "database_readonly",
     "security_scan",
@@ -62,6 +63,10 @@ class DiagnosticRunRequestSerializer(StrictSerializer):
     def validate(self, attrs):
         test_type = attrs["test_type"]
         environment = attrs["environment"]
+        if test_type == "runtime_health" and not attrs.get("target_task_id"):
+            raise serializers.ValidationError({"target_task_id": "This field is required for runtime health."})
+        if test_type == "ecs_discovery" and any(key in limits for key in ("max_requests", "max_requests_per_second", "max_virtual_users")):
+            raise serializers.ValidationError({"limits": "Load-generation limits are not valid for ECS discovery."})
         limits = attrs["limits"]
 
         if test_type == "load_test":
@@ -137,12 +142,13 @@ class DiagnosticRunCallbackSerializer(StrictSerializer):
     """Bounded payload accepted from a short-lived diagnostic runner."""
     schema_version = serializers.IntegerField()
     run_id = serializers.UUIDField()
-    test_type = serializers.ChoiceField(choices=("runtime_health",))
+    test_type = serializers.ChoiceField(choices=("runtime_health", "ecs_discovery"))
     result_status = serializers.ChoiceField(choices=("healthy", "failed", "unknown"))
     summary = serializers.CharField(max_length=2000)
-    task_last_status = serializers.CharField(max_length=32)
-    task_health_status = serializers.CharField(max_length=32)
-    containers = DiagnosticRunContainerResultSerializer(many=True, max_length=50)
+    task_last_status = serializers.CharField(max_length=32, required=False, default="UNKNOWN")
+    task_health_status = serializers.CharField(max_length=32, required=False, default="UNKNOWN")
+    containers = DiagnosticRunContainerResultSerializer(many=True, max_length=50, required=False, default=list)
+    discovery = serializers.JSONField(required=False)
     started_at = serializers.DateTimeField()
     finished_at = serializers.DateTimeField()
 
@@ -154,6 +160,10 @@ class DiagnosticRunCallbackSerializer(StrictSerializer):
         return value
 
     def validate(self, attrs):
+        if attrs["test_type"] == "ecs_discovery" and "discovery" not in attrs:
+            raise serializers.ValidationError({"discovery": "ECS discovery result is required."})
+        if attrs["test_type"] == "runtime_health" and "discovery" in attrs:
+            raise serializers.ValidationError({"discovery": "Discovery data is not valid for runtime health."})
         if attrs["finished_at"] < attrs["started_at"]:
             raise serializers.ValidationError({
                 "finished_at": "Finish time cannot be earlier than start time."
