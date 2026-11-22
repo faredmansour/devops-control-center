@@ -3,6 +3,8 @@
 This module deliberately defines validation only. It does not launch jobs or imply
 that every catalog entry already has an execution adapter.
 """
+import json
+
 from rest_framework import serializers
 
 
@@ -166,6 +168,26 @@ class DiagnosticRunCallbackSerializer(StrictSerializer):
             raise serializers.ValidationError(
                 f"Unsupported schema version. Expected {RUN_SCHEMA_VERSION}."
             )
+        return value
+
+    def validate_discovery(self, value):
+        if not isinstance(value, dict) or value.get("schema_version") != 1:
+            raise serializers.ValidationError("The discovery schema is invalid.")
+        if value.get("provider") != "aws" or value.get("discovery_scope") != [
+            "ecs.clusters", "ecs.services"
+        ]:
+            raise serializers.ValidationError("The discovery scope is invalid.")
+        clusters = value.get("clusters")
+        if not isinstance(clusters, list) or len(clusters) > 20:
+            raise serializers.ValidationError("The discovery cluster list exceeds its limit.")
+        if len(json.dumps(value, separators=(",", ":"))) > 250_000:
+            raise serializers.ValidationError("The discovery result exceeds its size limit.")
+        for cluster in clusters:
+            if not isinstance(cluster, dict):
+                raise serializers.ValidationError("A discovered cluster is invalid.")
+            services = cluster.get("services")
+            if not isinstance(services, list) or len(services) > 50:
+                raise serializers.ValidationError("A cluster service list exceeds its limit.")
         return value
 
     def validate(self, attrs):
