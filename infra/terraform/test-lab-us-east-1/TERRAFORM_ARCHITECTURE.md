@@ -59,7 +59,7 @@ infra/terraform/
 │   ├── network/
 │   ├── security-groups/
 │   ├── iam/
-│   ├── ecr/                 # when image repositories are designed
+│   ├── ecr/                 # private repositories for workload images
 │   ├── ecs/                 # reusable ECS task/service resources
 │   ├── load-balancer/       # listeners, target groups and TLS
 │   ├── data-services/       # dedicated E-commerce DB/cache if selected
@@ -159,7 +159,7 @@ In particular:
 | 3 | E-commerce source/deployment review | Repository and stack confirmed; replace local Compose MongoDB dependency with Atlas secret injection and correct frontend API URL configuration |
 | 4 | Final network/SG topology | Confirm ingress/routing, agent and test-worker paths, NAT EIP or Atlas PrivateLink connectivity, and narrowly scoped Atlas access |
 | 5 | IAM module baseline | Separate execution/task roles, scoped ECR/log/secret inputs, optional worker orchestration; add feature-specific policies only after source review |
-| 6 | ECR and image build/push | Immutable image digests exist in us-east-1 |
+| 6 | ECR repositories | Four private workload repositories with scan-on-push, immutable tags, and lifecycle retention; build/push images as a separate step |
 | 7 | E-commerce deployment | Frontend/API/MongoDB connectivity healthy and isolated |
 | 8 | DCC deployment and integration image | DCC can securely register/reach the target |
 | 9 | On-demand test workers | Cancellation, timeout, bounded tests and cleanup verified |
@@ -174,4 +174,4 @@ Each stage should be a small reviewable commit. A successful DCC deployment alon
 
 ## 13. Current implementation status
 
-The reusable Network, Security Groups, and IAM modules are composed into the us-east-1 root. The Security Groups module defines nine workload tiers; the IAM module creates eight isolated ECS roles (four execution roles and four task roles). Mocked IAM tests are included in the Terraform workflow. Confirm the latest workflow result before treating formatting, validation, and tests as passed. The IAM baseline does not yet grant application task permissions for EC2 discovery, S3 inventory, CloudWatch metrics, or ECS worker orchestration. E-commerce infrastructure, ECR repositories, ALBs/listeners, DCC Agent deployment, and temporary test-worker infrastructure remain to be implemented. No `terraform apply` is authorized by this document.
+The reusable Network, Security Groups, and IAM modules are composed into the us-east-1 root. The Security Groups module defines nine workload tiers; the IAM module creates eight isolated ECS roles (four execution roles and four task roles). Mocked IAM tests are included in the Terraform workflow. Confirm the latest workflow result before treating formatting, validation, and tests as passed. The IAM baseline does not yet grant application task permissions for EC2 discovery, S3 inventory, CloudWatch metrics, or ECS worker orchestration. The ECR module is implemented and composed into the root; it creates repository resources only when a later approved apply runs. Image build/push, E-commerce ECS infrastructure, ALBs/listeners, DCC Agent deployment, and temporary test-worker infrastructure remain to be implemented. No `terraform apply` is authorized by this document.
