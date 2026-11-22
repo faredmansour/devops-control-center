@@ -31,7 +31,7 @@ run "creates_seven_isolated_security_groups_with_safe_defaults" {
   }
 
   assert {
-    condition     = length(aws_vpc_security_group_ingress_rule.dcc_control_from_alb) == 1 && length(aws_vpc_security_group_ingress_rule.dcc_control_from_diagnostic_worker) == 1 && length(aws_vpc_security_group_ingress_rule.test_api_from_dcc_control) == 1 && length(aws_vpc_security_group_ingress_rule.test_api_from_diagnostic_worker) == 1
+    condition     = aws_vpc_security_group_ingress_rule.dcc_control_from_alb.from_port == 8000 && aws_vpc_security_group_ingress_rule.dcc_control_from_diagnostic_worker.from_port == 8000 && aws_vpc_security_group_ingress_rule.test_api_from_dcc_control.from_port == 8080 && aws_vpc_security_group_ingress_rule.test_api_from_diagnostic_worker.from_port == 8080
     error_message = "Internal ingress must follow the approved DCC and diagnostic traffic matrix."
   }
 }
