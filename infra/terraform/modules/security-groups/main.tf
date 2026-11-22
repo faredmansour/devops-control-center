@@ -180,56 +180,62 @@ resource "aws_vpc_security_group_egress_rule" "test_worker_to_cache" {
 }
 
 resource "aws_vpc_security_group_egress_rule" "dcc_control_https" {
-  count = var.enable_dcc_control_https_egress ? 1 : 0
+  for_each = toset(var.dcc_control_https_egress_cidrs)
 
   security_group_id = aws_security_group.this["dcc_control"].id
-  description       = "Optional outbound HTTPS for external APIs and AWS service endpoints."
-  cidr_ipv4         = "0.0.0.0/0"
+  description       = "Optional outbound HTTPS to explicitly approved destinations."
+  cidr_ipv4         = each.value
   from_port         = 443
   to_port           = 443
   ip_protocol       = "tcp"
 }
 
 resource "aws_vpc_security_group_egress_rule" "diagnostic_worker_https" {
-  count = var.enable_diagnostic_worker_https_egress ? 1 : 0
+  for_each = toset(var.diagnostic_worker_https_egress_cidrs)
 
   security_group_id = aws_security_group.this["diagnostic_worker"].id
-  description       = "Optional outbound HTTPS for external diagnostic integrations."
-  cidr_ipv4         = "0.0.0.0/0"
+  description       = "Optional outbound HTTPS to explicitly approved diagnostic destinations."
+  cidr_ipv4         = each.value
   from_port         = 443
   to_port           = 443
   ip_protocol       = "tcp"
 }
 
 resource "aws_vpc_security_group_egress_rule" "test_api_https" {
-  count = var.enable_test_api_https_egress ? 1 : 0
+  for_each = toset(var.test_api_https_egress_cidrs)
 
   security_group_id = aws_security_group.this["test_api"].id
-  description       = "Optional outbound HTTPS for application-under-test integrations."
-  cidr_ipv4         = "0.0.0.0/0"
+  description       = "Optional outbound HTTPS to explicitly approved application destinations."
+  cidr_ipv4         = each.value
   from_port         = 443
   to_port           = 443
   ip_protocol       = "tcp"
 }
 
 resource "aws_vpc_security_group_egress_rule" "test_worker_https" {
-  count = var.enable_test_worker_https_egress ? 1 : 0
+  for_each = toset(var.test_worker_https_egress_cidrs)
 
   security_group_id = aws_security_group.this["test_worker"].id
-  description       = "Optional outbound HTTPS for background worker integrations."
-  cidr_ipv4         = "0.0.0.0/0"
+  description       = "Optional outbound HTTPS to explicitly approved worker destinations."
+  cidr_ipv4         = each.value
   from_port         = 443
   to_port           = 443
   ip_protocol       = "tcp"
 }
 
 resource "aws_vpc_security_group_egress_rule" "diagnostic_worker_http" {
-  for_each = var.enable_diagnostic_public_http_egress ? toset(["80", "443"]) : toset([])
+  for_each = {
+    for pair in setproduct(var.diagnostic_public_http_egress_cidrs, [80, 443]) :
+    "${pair[0]}-${pair[1]}" => {
+      cidr = pair[0]
+      port = pair[1]
+    }
+  }
 
   security_group_id = aws_security_group.this["diagnostic_worker"].id
-  description       = "Optional public HTTP/HTTPS probes for diagnostic jobs."
-  cidr_ipv4         = "0.0.0.0/0"
-  from_port         = tonumber(each.value)
-  to_port           = tonumber(each.value)
+  description       = "Optional HTTP/HTTPS probes to explicitly approved diagnostic destinations."
+  cidr_ipv4         = each.value.cidr
+  from_port         = each.value.port
+  to_port           = each.value.port
   ip_protocol       = "tcp"
 }
