@@ -1,18 +1,14 @@
-# Independent Test Lab environment for us-east-1.
-# Copy to terraform.tfvars only after confirming CIDR non-overlap and image availability.
-# Never put credentials, generated secrets, or real passwords in this file.
-
+# Independent DCC Test Lab environment. No secrets belong in this file.
 aws_region       = "us-east-1"
 project_name     = "DCC-TestLab"
 environment_name = "lab"
 name_prefix      = "dcc-testlab-use1"
 
-# Dedicated range, intentionally distinct from the existing eu-north-1 lab (10.80.0.0/16).
-# MUST be checked against every VPC, VPN, peering, TGW, office and customer network before apply.
+# Proposed range; verify against all VPCs, VPNs, peering/TGW routes,
+# office networks and customer networks before any apply.
 vpc_cidr = "10.81.0.0/16"
 
-# Let the AWS provider select two currently available AZ names in us-east-1.
-# Do not copy eu-north-1 AZ names or AZ IDs across regions.
+# Empty selects two available AZ names in us-east-1.
 availability_zones = []
 
 public_subnet_cidrs = [
@@ -30,18 +26,8 @@ private_data_subnet_cidrs = [
   "10.81.49.0/24",
 ]
 
-enable_nat_gateway       = true
-ecr_repository_name      = "dcc-testlab-app"
-cloud_map_namespace_name = "dcc-test-use1.internal"
-cloud_map_service_name   = "dcc-test-api"
+enable_nat_gateway = true
 
 common_tags = {
-  Owner       = "replace-with-owner"
-  Environment = "lab"
-  Region      = "us-east-1"
+  Owner = "replace-with-owner"
 }
-
-# Required sensitive value dcc_django_secret is deliberately omitted.
-# Supply it out-of-band through a secure variable mechanism.
-# Image digests must exist in the us-east-1 ECR repositories; do not reuse
-# eu-north-1 image digests until the corresponding images are pushed here.
