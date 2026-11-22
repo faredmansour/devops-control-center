@@ -17,6 +17,7 @@ class AgentConfig:
     target_cluster_arn: str = ""
     callback_url: str = ""
     callback_token: str = ""
+    discovery_clusters: tuple[str, ...] = ()
 
     @classmethod
     def from_env(cls) -> "AgentConfig":
@@ -40,6 +41,11 @@ class AgentConfig:
             target_cluster_arn=os.environ.get("TARGET_CLUSTER_ARN", "").strip(),
             callback_url=os.environ.get("DCC_RESULT_CALLBACK_URL", "").strip(),
             callback_token=os.environ.get("DCC_RESULT_CALLBACK_TOKEN", "").strip(),
+            discovery_clusters=tuple(
+                item.strip()
+                for item in os.environ.get("DCC_DISCOVERY_CLUSTERS", "").split(",")
+                if item.strip()
+            ),
         )
         if mode == "runtime_health":
             required = (
@@ -53,6 +59,12 @@ class AgentConfig:
                 raise AgentConfigurationError(
                     "Runtime health mode is missing required job configuration."
                 )
+        if mode == "discover_ecs" and (
+            not config.discovery_clusters or len(config.discovery_clusters) > 20
+        ):
+            raise AgentConfigurationError(
+                "ECS discovery requires between 1 and 20 explicitly configured clusters."
+            )
         if mode == "discover_ecs" and bool(config.callback_url) != bool(
             config.run_id and config.callback_token
         ):
