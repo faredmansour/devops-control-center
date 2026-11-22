@@ -3,14 +3,9 @@ output "security_group_ids" {
   value       = { for name, group in aws_security_group.this : name => group.id }
 }
 
-output "dcc_alb_security_group_id" {
-  description = "Security Group ID for the DCC ALB."
-  value       = aws_security_group.this["dcc_alb"].id
-}
-
-output "ecommerce_alb_security_group_id" {
-  description = "Security Group ID for the E-commerce ALB."
-  value       = aws_security_group.this["ecommerce_alb"].id
+output "alb_security_group_id" {
+  description = "Security Group ID for the shared HTTP ALB."
+  value       = aws_security_group.this["alb"].id
 }
 
 output "dcc_control_security_group_id" {
