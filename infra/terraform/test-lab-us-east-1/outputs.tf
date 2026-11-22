@@ -57,3 +57,13 @@ output "nat_gateway_public_ip" {
   description = "Stable outbound public IP to allowlist in MongoDB Atlas, or null when NAT is disabled."
   value       = module.network.nat_gateway_public_ip
 }
+
+output "iam_execution_role_arns" {
+  description = "ECS execution role ARNs keyed by workload."
+  value       = module.iam.execution_role_arns
+}
+
+output "iam_task_role_arns" {
+  description = "ECS task role ARNs keyed by workload."
+  value       = module.iam.task_role_arns
+}
