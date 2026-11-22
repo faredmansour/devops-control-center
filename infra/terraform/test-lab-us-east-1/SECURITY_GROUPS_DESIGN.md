@@ -4,7 +4,7 @@
 
 ## 1. Workload boundaries
 
-The lab contains two separate application boundaries:
+The lab contains two separate application boundaries behind one shared ALB (HTTP 80 for E-commerce and HTTP 8080 for DCC):
 - **DCC Control Plane:** owns DCC orchestration and user-facing APIs.
 - **E-commerce Target:** a separate application whose frontend, backend/API, and MongoDB database must be isolated from DCC.
 
@@ -16,7 +16,7 @@ The DCC Agent / Integration Kit and temporary Test Workers are separate executio
 
 | Source SG | Destination SG | Protocol/port | Direction | Current decision |
 |---|---|---:|---|---|
-| Approved admin CIDRs / VPN ingress | ALB SG | TCP 443 | Ingress | Allow only explicitly approved source ranges |
+| Approved test-client CIDRs | Shared ALB SG | TCP 80 and 8080 | Ingress | Allow only explicitly approved source ranges |
 | ALB SG | DCC Control SG | TCP 8000 | Egress / ingress | Allow |
 | Diagnostic Worker SG | DCC Control SG | TCP 8000 | Egress / ingress | Allow diagnostic result callbacks |
 | DCC Control SG | Test API SG | TCP 8080 | Egress / ingress | Allow |
@@ -26,9 +26,9 @@ The DCC Agent / Integration Kit and temporary Test Workers are separate executio
 | Test API SG | Cache SG | TCP 6379 | Egress / ingress | Allow |
 | Test Worker SG | Cache SG | TCP 6379 | Egress / ingress | Allow |
 
-The module has been refactored for the reviewed E-commerce ports: frontend Nginx TCP 80, Express backend TCP 8000, and MongoDB Atlas TCP 27017/TLS. The E-commerce backend receives API traffic only from its frontend SG and approved temporary diagnostic/test worker SGs. Atlas is outside the VPC and has no AWS SG; its Network Access/IP Access List must allow only the selected AWS egress identity. The Atlas egress rule currently permits TCP 27017 to `0.0.0.0/0` because Security Groups cannot express Atlas FQDN destinations and Atlas endpoint IPs may change. This is a port-limited outbound exception, with the remote source restriction enforced by Atlas IP Access List and the stable NAT EIP.
+The module has been refactored for one shared ALB and the reviewed E-commerce ports: frontend Nginx TCP 80, Express backend TCP 8000, DCC API TCP 8000, and MongoDB Atlas TCP 27017/TLS. ALB port 80 routes E-commerce `/` to frontend and `/api/*`, `/health`, `/uploadimage*` to backend; ALB port 8080 forwards to DCC. The E-commerce backend receives API traffic only from its frontend SG and approved temporary diagnostic/test worker SGs. Atlas is outside the VPC and has no AWS SG; its Network Access/IP Access List must allow only the selected AWS egress identity. The Atlas egress rule currently permits TCP 27017 to `0.0.0.0/0` because Security Groups cannot express Atlas FQDN destinations and Atlas endpoint IPs may change. This is a port-limited outbound exception, with the remote source restriction enforced by Atlas IP Access List and the stable NAT EIP.
 
-The module now creates nine groups: `dcc_alb`, `ecommerce_alb`, `dcc_control`, `dcc_agent`, `diagnostic_worker`, `ecommerce_frontend`, `ecommerce_backend`, `test_worker`, and `cache`.
+The module now creates eight groups: `alb`, `dcc_control`, `dcc_agent`, `diagnostic_worker`, `ecommerce_frontend`, `ecommerce_backend`, `test_worker`, and `cache`.
 
 **Important:** Redis remains optional and is reachable only from the E-commerce backend. The DCC Agent SG currently has no ingress or egress rules; its authenticated control-plane communication path must be implemented and tested before deploying the agent. The E-commerce ALB ingress allowlist is independent from the DCC operator allowlist and defaults to empty.
 
@@ -47,19 +47,19 @@ Do not assume the DCC and E-commerce applications should share one ALB, task rol
 
 ## 4. Default-deny and optional public egress
 
-- `operator_ingress_cidrs` defaults to an empty list. Until approved CIDRs are supplied, the ALB has no inbound rule.
-- DCC and E-commerce ALB ingress use separate explicit CIDR allowlists, both empty by default.
+- `alb_ingress_cidrs` defaults to an empty list. Until approved test-client CIDRs are supplied, the shared ALB has no inbound rule on either HTTP listener.
+- The shared ALB uses one explicit client CIDR allowlist for ports 80 and 8080, empty by default.
 - Optional HTTPS egress for DCC Control, Diagnostic Worker, and Test Worker is controlled by explicit destination CIDR allowlists, all empty by default.
 - Diagnostic public HTTP/HTTPS probing uses a separate explicit destination CIDR allowlist, also empty by default.
 - MongoDB Atlas is external and receives no AWS SG. The E-commerce backend has a documented TCP 27017 egress rule to any destination because Atlas FQDN/IP ranges are not directly enforceable in SGs. Atlas IP Access List must restrict the source to the NAT Gateway Elastic IP and TLS must be required. This remains a review gate before apply.
 - No SSH/RDP ingress is created.
-- ALB HTTP/80 is not exposed. If required, add it only with a separately implemented and reviewed HTTP-to-HTTPS redirect listener.
+- HTTP/80 and HTTP/8080 are test-only listeners; no HTTPS/ACM is configured in this test phase.
 
 ## 5. Required review gates before apply
 
-1. Confirm approved admin CIDRs or VPN ingress.
+1. Confirm approved test-client IPv4 CIDR(s), preferably the operator public IP as `/32`.
 2. Confirm actual container ports and health-check paths from the DCC and E-commerce deployment definitions.
-3. Confirm whether ALB is shared or separate, and verify host/path routing and TLS design.
+3. Confirm the shared ALB listener and E-commerce path routing. DCC is isolated on port 8080.
 4. Confirm ACM certificate ARN and domain ownership in `us-east-1`, if a public HTTPS ALB is selected.
 5. Confirm all VPC/subnet CIDRs are non-overlapping with connected networks.
 6. Confirm ECR images have been built/pushed in `us-east-1` and task definitions pin immutable digests.
