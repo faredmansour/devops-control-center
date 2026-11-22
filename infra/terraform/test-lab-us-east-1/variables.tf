@@ -78,3 +78,27 @@ variable "common_tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "operator_ingress_cidrs" {
+  description = "Approved IPv4 CIDRs allowed to reach the ALB over HTTPS. Empty means no public ingress."
+  type        = list(string)
+  default     = []
+}
+
+variable "enable_application_https_egress" {
+  description = "Allow application tasks outbound HTTPS to public IPv4 destinations."
+  type        = bool
+  default     = false
+}
+
+variable "enable_worker_https_egress" {
+  description = "Allow worker tasks outbound HTTPS to public IPv4 destinations."
+  type        = bool
+  default     = false
+}
+
+variable "enable_diagnostics_http_egress" {
+  description = "Allow diagnostic tasks outbound HTTP/HTTPS to public IPv4 destinations."
+  type        = bool
+  default     = false
+}
