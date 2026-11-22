@@ -3,9 +3,14 @@ output "security_group_ids" {
   value       = { for name, group in aws_security_group.this : name => group.id }
 }
 
-output "alb_security_group_id" {
-  description = "Security Group ID for the Application Load Balancer."
-  value       = aws_security_group.this["alb"].id
+output "dcc_alb_security_group_id" {
+  description = "Security Group ID for the DCC ALB."
+  value       = aws_security_group.this["dcc_alb"].id
+}
+
+output "ecommerce_alb_security_group_id" {
+  description = "Security Group ID for the E-commerce ALB."
+  value       = aws_security_group.this["ecommerce_alb"].id
 }
 
 output "dcc_control_security_group_id" {
@@ -13,27 +18,32 @@ output "dcc_control_security_group_id" {
   value       = aws_security_group.this["dcc_control"].id
 }
 
+output "dcc_agent_security_group_id" {
+  description = "Security Group ID for the reusable DCC Agent."
+  value       = aws_security_group.this["dcc_agent"].id
+}
+
 output "diagnostic_worker_security_group_id" {
-  description = "Security Group ID for on-demand diagnostic workers."
+  description = "Security Group ID for temporary diagnostic workers."
   value       = aws_security_group.this["diagnostic_worker"].id
 }
 
-output "test_api_security_group_id" {
-  description = "Security Group ID for the application-under-test API."
-  value       = aws_security_group.this["test_api"].id
+output "ecommerce_frontend_security_group_id" {
+  description = "Security Group ID for the E-commerce frontend."
+  value       = aws_security_group.this["ecommerce_frontend"].id
+}
+
+output "ecommerce_backend_security_group_id" {
+  description = "Security Group ID for the E-commerce backend."
+  value       = aws_security_group.this["ecommerce_backend"].id
 }
 
 output "test_worker_security_group_id" {
-  description = "Security Group ID for background test workers."
+  description = "Security Group ID for temporary DCC test workers."
   value       = aws_security_group.this["test_worker"].id
 }
 
-output "database_security_group_id" {
-  description = "Security Group ID for the database tier."
-  value       = aws_security_group.this["database"].id
-}
-
 output "cache_security_group_id" {
-  description = "Security Group ID for the cache tier."
+  description = "Security Group ID for the optional private cache."
   value       = aws_security_group.this["cache"].id
 }
