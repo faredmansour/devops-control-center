@@ -24,3 +24,19 @@ module "security_groups" {
   diagnostic_public_http_egress_cidrs  = var.diagnostic_public_http_egress_cidrs
   tags                                 = local.base_tags
 }
+
+module "iam" {
+  source = "../modules/iam"
+
+  name_prefix    = var.name_prefix
+  aws_region     = var.aws_region
+  aws_account_id = data.aws_caller_identity.current.account_id
+
+  ecr_repository_arns = var.iam_ecr_repository_arns
+  log_group_arns      = var.iam_log_group_arns
+  secret_arns         = var.iam_secret_arns
+  kms_key_arns        = var.iam_kms_key_arns
+
+  enable_test_worker_orchestration = false
+  tags                             = local.base_tags
+}
