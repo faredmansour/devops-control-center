@@ -19,34 +19,59 @@ variable "operator_ingress_cidrs" {
   }
 }
 
-variable "enable_dcc_control_https_egress" {
-  description = "Allow the DCC control plane outbound HTTPS to public IPv4 destinations."
-  type        = bool
-  default     = false
+variable "dcc_control_https_egress_cidrs" {
+  description = "Approved IPv4 CIDRs that DCC Control may reach over HTTPS. Empty means no public HTTPS egress."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for cidr in var.dcc_control_https_egress_cidrs : can(cidrnetmask(cidr))])
+    error_message = "Every DCC Control HTTPS egress CIDR must be a valid IPv4 CIDR."
+  }
 }
 
-variable "enable_diagnostic_worker_https_egress" {
-  description = "Allow diagnostic workers outbound HTTPS to public IPv4 destinations."
-  type        = bool
-  default     = false
+variable "diagnostic_worker_https_egress_cidrs" {
+  description = "Approved IPv4 CIDRs that diagnostic workers may reach over HTTPS."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for cidr in var.diagnostic_worker_https_egress_cidrs : can(cidrnetmask(cidr))])
+    error_message = "Every diagnostic worker HTTPS egress CIDR must be a valid IPv4 CIDR."
+  }
 }
 
-variable "enable_test_api_https_egress" {
-  description = "Allow the application-under-test API outbound HTTPS to public IPv4 destinations."
-  type        = bool
-  default     = false
+variable "test_api_https_egress_cidrs" {
+  description = "Approved IPv4 CIDRs that the test API may reach over HTTPS."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for cidr in var.test_api_https_egress_cidrs : can(cidrnetmask(cidr))])
+    error_message = "Every test API HTTPS egress CIDR must be a valid IPv4 CIDR."
+  }
 }
 
-variable "enable_test_worker_https_egress" {
-  description = "Allow test workers outbound HTTPS to public IPv4 destinations."
-  type        = bool
-  default     = false
+variable "test_worker_https_egress_cidrs" {
+  description = "Approved IPv4 CIDRs that test workers may reach over HTTPS."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for cidr in var.test_worker_https_egress_cidrs : can(cidrnetmask(cidr))])
+    error_message = "Every test worker HTTPS egress CIDR must be a valid IPv4 CIDR."
+  }
 }
 
-variable "enable_diagnostic_public_http_egress" {
-  description = "Allow diagnostic workers public HTTP/HTTPS probes to IPv4 destinations."
-  type        = bool
-  default     = false
+variable "diagnostic_public_http_egress_cidrs" {
+  description = "Approved IPv4 CIDRs for diagnostic HTTP/HTTPS probes. Empty means no public probe egress."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for cidr in var.diagnostic_public_http_egress_cidrs : can(cidrnetmask(cidr))])
+    error_message = "Every diagnostic public HTTP egress CIDR must be a valid IPv4 CIDR."
+  }
 }
 
 variable "tags" {
