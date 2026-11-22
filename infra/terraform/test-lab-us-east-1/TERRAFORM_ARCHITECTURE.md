@@ -125,7 +125,7 @@ Naming:
 |---|---|---|
 | 0 | Directory/design baseline | Review module boundaries and naming |
 | 1 | Network module | fmt, validate, CIDR positive/negative checks |
-| 2 | Security Groups module | fmt, validate, ingress/egress matrix review |
+| 2 | Security Groups module | fmt, validate, mocked policy tests, ingress/egress matrix review |
 | 3 | IAM module | trust-policy and least-privilege review |
 | 4 | Root composition | init/validate and dependency review |
 | 5 | ECR and image replication | immutable digest exists in us-east-1 |
@@ -144,4 +144,4 @@ A concise explanation for a technical review:
 
 ## 10. Current implementation status
 
-Current implementation status: the reusable Network module and the us-east-1 root composition are present. CI formatting, initialization, and validation checks have passed. Network lifecycle preconditions now enforce the two-AZ requirement, configured-AZ availability, subnet containment, and non-overlap as blocking plan/apply conditions. Automated Terraform tests have been added for valid CIDRs, out-of-range subnet CIDRs, overlapping subnet CIDRs, and unavailable AZs; their first CI execution is in progress. Security Groups and IAM remain design/planning only; no executable modules exist for them yet. CI checks do not create AWS resources. Once the Network validation gates pass, the next coding stage is the Security Groups module.
+Current implementation status: the reusable Network module and the us-east-1 root composition are present. CI formatting, initialization, and validation checks have passed. Network lifecycle preconditions now enforce the two-AZ requirement, configured-AZ availability, subnet containment, and non-overlap as blocking plan/apply conditions. Automated Terraform tests have been added for valid CIDRs, out-of-range subnet CIDRs, overlapping subnet CIDRs, and unavailable AZs; their first CI execution is in progress. An initial reusable Security Groups module is implemented and composed into the us-east-1 root. It creates six isolated tiers (ALB, application, worker, database, cache, diagnostics), with no public ingress by default and optional public egress disabled by default. Mocked Terraform policy tests are now included in CI. IAM remains design/planning only. CI checks do not create AWS resources. Once the Network validation gates pass, the next coding stage is the Security Groups module.
