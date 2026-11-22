@@ -9,7 +9,7 @@ variable "vpc_id" {
 }
 
 variable "operator_ingress_cidrs" {
-  description = "Approved IPv4 CIDRs allowed to reach the ALB over HTTPS. Empty means no public ingress."
+  description = "Approved IPv4 CIDRs allowed to reach the DCC ALB over HTTPS. Empty means no DCC public ingress."
   type        = list(string)
   default     = []
 
@@ -19,8 +19,19 @@ variable "operator_ingress_cidrs" {
   }
 }
 
+variable "ecommerce_ingress_cidrs" {
+  description = "Approved IPv4 CIDRs allowed to reach the E-commerce ALB over HTTPS. Empty means no public ingress until explicitly approved."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for cidr in var.ecommerce_ingress_cidrs : can(cidrnetmask(cidr))])
+    error_message = "Every ecommerce_ingress_cidrs entry must be a valid IPv4 CIDR."
+  }
+}
+
 variable "dcc_control_https_egress_cidrs" {
-  description = "Approved IPv4 CIDRs that DCC Control may reach over HTTPS. Empty means no public HTTPS egress."
+  description = "Approved IPv4 CIDRs that DCC Control may reach over HTTPS."
   type        = list(string)
   default     = []
 
@@ -41,17 +52,6 @@ variable "diagnostic_worker_https_egress_cidrs" {
   }
 }
 
-variable "test_api_https_egress_cidrs" {
-  description = "Approved IPv4 CIDRs that the test API may reach over HTTPS."
-  type        = list(string)
-  default     = []
-
-  validation {
-    condition     = alltrue([for cidr in var.test_api_https_egress_cidrs : can(cidrnetmask(cidr))])
-    error_message = "Every test API HTTPS egress CIDR must be a valid IPv4 CIDR."
-  }
-}
-
 variable "test_worker_https_egress_cidrs" {
   description = "Approved IPv4 CIDRs that test workers may reach over HTTPS."
   type        = list(string)
@@ -64,7 +64,7 @@ variable "test_worker_https_egress_cidrs" {
 }
 
 variable "diagnostic_public_http_egress_cidrs" {
-  description = "Approved IPv4 CIDRs for diagnostic HTTP/HTTPS probes. Empty means no public probe egress."
+  description = "Approved IPv4 CIDRs for diagnostic HTTP/HTTPS probes."
   type        = list(string)
   default     = []
 
