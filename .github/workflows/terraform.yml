@@ -42,6 +42,27 @@ jobs:
       - name: Validate configuration
         run: terraform validate -no-color
 
+  security-groups-tests:
+    name: Security Groups module tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/terraform/modules/security-groups
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.10.5
+          terraform_wrapper: false
+      - name: Check module formatting
+        run: terraform fmt -check -recursive
+      - name: Initialize without backend
+        run: terraform init -backend=false -input=false
+      - name: Run mocked Security Groups tests
+        run: terraform test -no-color
+
   network-tests:
     name: Network module tests
     runs-on: ubuntu-latest
