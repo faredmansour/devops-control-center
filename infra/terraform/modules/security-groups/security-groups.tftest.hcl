@@ -1,6 +1,6 @@
 mock_provider "aws" {}
 
-run "creates_six_isolated_security_groups_with_safe_defaults" {
+run "creates_seven_isolated_security_groups_with_safe_defaults" {
   command = plan
 
   variables {
@@ -11,8 +11,8 @@ run "creates_six_isolated_security_groups_with_safe_defaults" {
   }
 
   assert {
-    condition     = length(aws_security_group.this) == 6
-    error_message = "The module must create exactly six tier-specific Security Groups."
+    condition     = length(aws_security_group.this) == 7
+    error_message = "The module must create exactly seven tier-specific Security Groups."
   }
 
   assert {
@@ -21,13 +21,18 @@ run "creates_six_isolated_security_groups_with_safe_defaults" {
   }
 
   assert {
-    condition     = length(aws_vpc_security_group_egress_rule.application_https) == 0 && length(aws_vpc_security_group_egress_rule.worker_https) == 0 && length(aws_vpc_security_group_egress_rule.diagnostics_http) == 0
+    condition     = length(aws_vpc_security_group_egress_rule.dcc_control_https) == 0 && length(aws_vpc_security_group_egress_rule.diagnostic_worker_https) == 0 && length(aws_vpc_security_group_egress_rule.test_api_https) == 0 && length(aws_vpc_security_group_egress_rule.test_worker_https) == 0 && length(aws_vpc_security_group_egress_rule.diagnostic_worker_http) == 0
     error_message = "Public egress must remain disabled by default."
   }
 
   assert {
-    condition     = length(aws_vpc_security_group_ingress_rule.database_from_application) == 2 && length(aws_vpc_security_group_ingress_rule.cache_from_application) == 2
-    error_message = "Database and cache ingress must be limited to the application and worker Security Groups."
+    condition     = length(aws_vpc_security_group_ingress_rule.database_from_test_workloads) == 2 && length(aws_vpc_security_group_ingress_rule.cache_from_test_workloads) == 2
+    error_message = "Database and cache ingress must be limited to the test API and test worker."
+  }
+
+  assert {
+    condition     = length(aws_vpc_security_group_ingress_rule.dcc_control_from_alb) == 1 && length(aws_vpc_security_group_ingress_rule.dcc_control_from_diagnostic_worker) == 1 && length(aws_vpc_security_group_ingress_rule.test_api_from_dcc_control) == 1 && length(aws_vpc_security_group_ingress_rule.test_api_from_diagnostic_worker) == 1
+    error_message = "Internal ingress must follow the approved DCC and diagnostic traffic matrix."
   }
 }
 
@@ -35,12 +40,14 @@ run "allows_public_egress_only_when_explicitly_enabled" {
   command = plan
 
   variables {
-    name_prefix                     = "dcc-sg-test"
-    vpc_id                          = "vpc-0123456789abcdef0"
-    operator_ingress_cidrs          = []
-    enable_application_https_egress = true
-    enable_worker_https_egress      = true
-    enable_diagnostics_http_egress  = true
+    name_prefix                          = "dcc-sg-test"
+    vpc_id                               = "vpc-0123456789abcdef0"
+    operator_ingress_cidrs               = []
+    enable_dcc_control_https_egress      = true
+    enable_diagnostic_worker_https_egress = true
+    enable_test_api_https_egress         = true
+    enable_test_worker_https_egress      = true
+    enable_diagnostic_public_http_egress = true
   }
 
   assert {
@@ -49,7 +56,7 @@ run "allows_public_egress_only_when_explicitly_enabled" {
   }
 
   assert {
-    condition     = length(aws_vpc_security_group_egress_rule.application_https) == 1 && length(aws_vpc_security_group_egress_rule.worker_https) == 1 && length(aws_vpc_security_group_egress_rule.diagnostics_http) == 2
+    condition     = length(aws_vpc_security_group_egress_rule.dcc_control_https) == 1 && length(aws_vpc_security_group_egress_rule.diagnostic_worker_https) == 1 && length(aws_vpc_security_group_egress_rule.test_api_https) == 1 && length(aws_vpc_security_group_egress_rule.test_worker_https) == 1 && length(aws_vpc_security_group_egress_rule.diagnostic_worker_http) == 2
     error_message = "Explicit egress opt-ins must create only their documented rules."
   }
 }
