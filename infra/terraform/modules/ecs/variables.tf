@@ -17,6 +17,11 @@ variable "ecommerce_frontend_image" { type = string }
 variable "ecommerce_backend_image" { type = string }
 variable "mongodb_atlas_secret_arn" { type = string }
 variable "jwt_secret_arn" { type = string }
+variable "enable_application_services" {
+  description = "Start the three ECS services only after images and required secret values exist."
+  type        = bool
+  default     = false
+}
 variable "tags" {
   type    = map(string)
   default = {}
