@@ -24,7 +24,7 @@ DCC provides the user-facing control plane: project/environment registration, te
 
 E-commerce is a separately deployed application and the primary target used to validate DCC's capabilities. Its React/Vite frontend, Node.js/Express 5 backend/API, and dedicated MongoDB database (Mongoose) belong to the E-commerce workload boundary. The MongoDB database is dedicated to E-commerce and is not shared with DCC. Redis is an optional cache integration; it is not a substitute for the persistent MongoDB data store.
 
-The exact E-commerce repository, runtime topology, container ports, persistence requirements, and deployment method must be confirmed from its source and deployment configuration before creating ECS services, ALB listeners, or database resources. Do not infer these details from the generic Test API SG.
+**Target repository:** [faredmansour/ecommerce-project](https://github.com/faredmansour/ecommerce-project), branch `master` (reviewed for this design). The repository contains `frontend/` (React/Vite), `backend/` (Node.js/Express 5), root `docker-compose.yml`, and separate frontend/backend Dockerfiles. The backend listens on TCP 8000; the frontend container serves static assets through Nginx on TCP 80. The exact AWS routing/ALB arrangement still needs to be selected and validated before creating listeners or services. Do not infer final topology from the generic Test API SG.
 
 ### C. Reusable DCC Integration Kit / Agent
 
@@ -107,7 +107,7 @@ IAM roles must be designed per workload, not shared across the entire lab:
 | DCC Agent role/identity | Authenticate to DCC and perform only its approved integration actions; AWS permissions only if a concrete feature requires them | No broad account discovery or administrative access by default |
 | Test Worker role | Read-only discovery/test permissions scoped to approved resources and the test session | No application deployment, IAM mutation, or unrestricted infrastructure changes |
 
-Repository review confirms the E-commerce stack is React/Vite + Node.js/Express 5 + MongoDB/Mongoose, with Redis and Cloudinary as optional integrations. The current Compose file points DB_URL to mongodb://host.docker.internal:27017/e-commerce but does not define a MongoDB service; the AWS staging design must provide a reachable, persistent MongoDB endpoint and set DB_URL through a secret/configuration mechanism. The final policies depend on source-code review and the selected execution model. Use separate task roles even when two containers happen to run in one ECS task. Prefer short-lived credentials, scoped resource ARNs, and explicit trust relationships. Do not create the IAM module until the required API actions, resource scopes, and trust principals have been documented and reviewed.
+Repository review confirms the E-commerce stack is React/Vite + Node.js/Express 5 + MongoDB/Mongoose, with Redis and Cloudinary as optional integrations. The current Compose file points `DB_URL` to `mongodb://host.docker.internal:27017/e-commerce` but does not define a MongoDB service. It also builds the frontend with `VITE_API_URL=http://localhost:8000/api`, which is a local-development value and must be replaced at build time for the AWS URL/routing design. The Compose file publishes Redis on the host and configures it as a cache; production network exposure must instead be private and SG-scoped. The Render blueprint's frontend `rootDir` is `frontend final project`, while the repository directory is `frontend`; do not rely on that blueprint as-is for AWS deployment. The AWS staging design must provide a reachable, persistent MongoDB endpoint and inject `DB_URL` through a secret/configuration mechanism. The final policies depend on source-code review and the selected execution model. Use separate task roles even when two containers happen to run in one ECS task. Prefer short-lived credentials, scoped resource ARNs, and explicit trust relationships. Do not create the IAM module until the required API actions, resource scopes, and trust principals have been documented and reviewed.
 
 ## 7. Network and security boundaries
 
@@ -156,17 +156,17 @@ In particular:
 | 0 | Two-application architecture baseline | Review DCC/E-commerce/Agent/Worker boundaries |
 | 1 | Network module | fmt, validate, CIDR positive/negative checks |
 | 2 | Initial Security Groups module | fmt, validate, mocked policy tests, traffic matrix review |
-| 3 | E-commerce source/deployment review | Confirm repository, runtime, ports, DB and persistence |
+| 3 | E-commerce source/deployment review | Repository and stack confirmed; resolve Compose MongoDB and frontend API URL configuration |
 | 4 | Final network/SG topology | Confirm ingress, routing, agent and test-worker paths |
 | 5 | IAM design and module | Trust-policy and least-privilege review for every workload |
 | 6 | ECR and image build/push | Immutable image digests exist in us-east-1 |
-| 7 | E-commerce deployment | Frontend/API/database healthy and isolated |
+| 7 | E-commerce deployment | Frontend/API/MongoDB connectivity healthy and isolated |
 | 8 | DCC deployment and integration image | DCC can securely register/reach the target |
 | 9 | On-demand test workers | Cancellation, timeout, bounded tests and cleanup verified |
 | 10 | Full Terraform plan | Zero unintended changes; no eu-north-1 state/resources |
 | 11 | Apply | Only after separate explicit deployment approval |
 
-Each stage should be a small reviewable commit. A successful DCC deployment alone is not acceptance: the lab's functional milestone is DCC successfully executing authorized tests against the deployed E-commerce target and returning evidence/results.
+Each stage should be a small reviewable commit. A successful DCC deployment alone is not acceptance. The first milestone is: deploy E-commerce, register it in DCC, establish secure connectivity/integration, and demonstrate resource/target discovery. The next milestone is a bounded API/health smoke test with an evidence-backed result. Load, security, performance, cancellation, and cleanup scenarios follow in later validation stages; they are not prerequisites for the first integration milestone.
 
 ## 12. How to explain this architecture
 
