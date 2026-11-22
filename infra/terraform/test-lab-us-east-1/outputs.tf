@@ -67,3 +67,13 @@ output "iam_task_role_arns" {
   description = "ECS task role ARNs keyed by workload."
   value       = module.iam.task_role_arns
 }
+
+output "ecr_repository_arns" {
+  description = "Private ECR repository ARNs keyed by workload."
+  value       = module.ecr.repository_arns
+}
+
+output "ecr_repository_urls" {
+  description = "Private ECR repository URLs keyed by workload."
+  value       = module.ecr.repository_urls
+}
