@@ -14,13 +14,13 @@ module "network" {
 module "security_groups" {
   source = "../modules/security-groups"
 
-  name_prefix                     = var.name_prefix
-  vpc_id                          = module.network.vpc_id
-  operator_ingress_cidrs          = var.operator_ingress_cidrs
+  name_prefix                           = var.name_prefix
+  vpc_id                                = module.network.vpc_id
+  operator_ingress_cidrs                = var.operator_ingress_cidrs
   enable_dcc_control_https_egress       = var.enable_dcc_control_https_egress
   enable_diagnostic_worker_https_egress = var.enable_diagnostic_worker_https_egress
   enable_test_api_https_egress          = var.enable_test_api_https_egress
   enable_test_worker_https_egress       = var.enable_test_worker_https_egress
   enable_diagnostic_public_http_egress  = var.enable_diagnostic_public_http_egress
-  tags                            = local.base_tags
+  tags                                  = local.base_tags
 }
