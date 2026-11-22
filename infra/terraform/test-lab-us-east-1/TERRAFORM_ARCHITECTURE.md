@@ -22,7 +22,7 @@ DCC provides the user-facing control plane: project/environment registration, te
 
 ### B. E-commerce Target Application
 
-E-commerce is a separately deployed application and the primary target used to validate DCC's capabilities. Its frontend, backend/API, and PostgreSQL data store belong to the E-commerce workload boundary. The database is dedicated to E-commerce and is not shared with DCC.
+E-commerce is a separately deployed application and the primary target used to validate DCC's capabilities. Its React/Vite frontend, Node.js/Express 5 backend/API, and dedicated MongoDB database (Mongoose) belong to the E-commerce workload boundary. The MongoDB database is dedicated to E-commerce and is not shared with DCC. Redis is an optional cache integration; it is not a substitute for the persistent MongoDB data store.
 
 The exact E-commerce repository, runtime topology, container ports, persistence requirements, and deployment method must be confirmed from its source and deployment configuration before creating ECS services, ALB listeners, or database resources. Do not infer these details from the generic Test API SG.
 
@@ -43,7 +43,7 @@ Temporary workers execute explicitly authorized API, load, security, performance
 | DCC Control Plane | Orchestration and user interface/API | DCC application runtime and its required configuration | E-commerce database or E-commerce lifecycle |
 | E-commerce Frontend | Customer-facing web UI | Frontend runtime/assets | DCC credentials or database access |
 | E-commerce Backend | E-commerce API/business logic | Backend runtime and application configuration | DCC control-plane permissions |
-| E-commerce PostgreSQL | E-commerce persistence | Dedicated database and credentials | DCC application data |
+| E-commerce MongoDB | E-commerce persistence | Dedicated database and credentials | DCC application data |
 | DCC Agent / Integration Kit | Secure target-side integration | Minimal integration configuration/identity | Broad AWS administrator permissions |
 | Test Workers | Temporary test execution | Ephemeral execution state and bounded test artifacts | Permanent target credentials or unrestricted target access |
 
@@ -90,7 +90,7 @@ Do not create empty module directories just to make the tree look complete. Add 
 | ecr | repositories, lifecycle and immutability | image build/push credentials |
 | ecs | clusters, task definitions, services | VPC creation, IAM policy authoring |
 | load-balancer | ALB, listeners, target groups, ACM attachment | application authentication |
-| data-services | E-commerce RDS/ElastiCache and subnet groups, if selected | application schema/migrations |
+| data-services | E-commerce MongoDB/Redis and subnet groups, if selected | application schema/migrations |
 | diagnostic-runner | temporary test task definitions and execution configuration | permanent application lifecycle |
 | root | composition, environment values, outputs | detailed resource implementation |
 
@@ -100,14 +100,14 @@ IAM roles must be designed per workload, not shared across the entire lab:
 
 | Identity | Intended permissions | Explicit exclusions |
 |---|---|---|
-| DCC ECS execution role | Pull DCC image from its ECR repository; write container logs; retrieve only explicitly referenced runtime secrets if required | No E-commerce DB access; no broad discovery permissions |
+| DCC ECS execution role | Pull DCC image from its ECR repository; write container logs; retrieve only explicitly referenced runtime secrets if required | No E-commerce MongoDB access; no broad discovery permissions |
 | DCC task role | Only the AWS APIs required by implemented DCC control-plane features | No blanket administrator or wildcard resource mutation |
 | E-commerce execution role | Pull E-commerce images; write its container logs; retrieve only its own runtime secrets if required | No DCC control-plane permissions |
 | E-commerce backend task role | Only application-specific AWS integrations confirmed from source code | No DCC discovery/test permissions |
 | DCC Agent role/identity | Authenticate to DCC and perform only its approved integration actions; AWS permissions only if a concrete feature requires them | No broad account discovery or administrative access by default |
 | Test Worker role | Read-only discovery/test permissions scoped to approved resources and the test session | No application deployment, IAM mutation, or unrestricted infrastructure changes |
 
-The final policies depend on source-code review and the selected execution model. Use separate task roles even when two containers happen to run in one ECS task. Prefer short-lived credentials, scoped resource ARNs, and explicit trust relationships. Do not create the IAM module until the required API actions, resource scopes, and trust principals have been documented and reviewed.
+Repository review confirms the E-commerce stack is React/Vite + Node.js/Express 5 + MongoDB/Mongoose, with Redis and Cloudinary as optional integrations. The current Compose file points DB_URL to mongodb://host.docker.internal:27017/e-commerce but does not define a MongoDB service; the AWS staging design must provide a reachable, persistent MongoDB endpoint and set DB_URL through a secret/configuration mechanism. The final policies depend on source-code review and the selected execution model. Use separate task roles even when two containers happen to run in one ECS task. Prefer short-lived credentials, scoped resource ARNs, and explicit trust relationships. Do not create the IAM module until the required API actions, resource scopes, and trust principals have been documented and reviewed.
 
 ## 7. Network and security boundaries
 
@@ -115,7 +115,7 @@ The final policies depend on source-code review and the selected execution model
 - Keep application workloads private where the selected ingress architecture allows it.
 - Do not assume DCC and E-commerce should share one public ALB. Decide whether they need separate ALBs, listeners, host-based routing, or a private target path after reviewing domains, authentication, and exposure requirements.
 - Keep E-commerce frontend, backend, and database access paths explicit. A frontend must not receive database credentials.
-- E-commerce PostgreSQL is dedicated to E-commerce and accepts connections only from the E-commerce backend (and explicitly approved migration/maintenance path).
+- E-commerce MongoDB is dedicated to E-commerce and accepts connections only from the E-commerce backend (and explicitly approved migration/maintenance path).
 - DCC-to-target test traffic must be limited to the required E-commerce API/health endpoints and approved test-worker sources.
 - Prefer an authenticated outbound agent/control channel where possible; do not create public inbound access to the agent.
 - Test Workers must be temporary, isolated, bounded, and unable to reach unrelated workloads.
