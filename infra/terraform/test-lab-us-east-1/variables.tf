@@ -85,32 +85,32 @@ variable "operator_ingress_cidrs" {
   default     = []
 }
 
-variable "enable_dcc_control_https_egress" {
-  description = "Allow DCC control-plane outbound HTTPS to public IPv4 destinations."
-  type        = bool
-  default     = false
+variable "dcc_control_https_egress_cidrs" {
+  description = "Approved IPv4 CIDRs that DCC Control may reach over HTTPS."
+  type        = list(string)
+  default     = []
 }
 
-variable "enable_diagnostic_worker_https_egress" {
-  description = "Allow diagnostic workers outbound HTTPS to public IPv4 destinations."
-  type        = bool
-  default     = false
+variable "diagnostic_worker_https_egress_cidrs" {
+  description = "Approved IPv4 CIDRs that diagnostic workers may reach over HTTPS."
+  type        = list(string)
+  default     = []
 }
 
-variable "enable_test_api_https_egress" {
-  description = "Allow the application-under-test API outbound HTTPS to public IPv4 destinations."
-  type        = bool
-  default     = false
+variable "test_api_https_egress_cidrs" {
+  description = "Approved IPv4 CIDRs that the test API may reach over HTTPS."
+  type        = list(string)
+  default     = []
 }
 
-variable "enable_test_worker_https_egress" {
-  description = "Allow test workers outbound HTTPS to public IPv4 destinations."
-  type        = bool
-  default     = false
+variable "test_worker_https_egress_cidrs" {
+  description = "Approved IPv4 CIDRs that test workers may reach over HTTPS."
+  type        = list(string)
+  default     = []
 }
 
-variable "enable_diagnostic_public_http_egress" {
-  description = "Allow diagnostic workers public HTTP/HTTPS probes to IPv4 destinations."
-  type        = bool
-  default     = false
+variable "diagnostic_public_http_egress_cidrs" {
+  description = "Approved IPv4 CIDRs for diagnostic HTTP/HTTPS probes."
+  type        = list(string)
+  default     = []
 }
