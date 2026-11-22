@@ -25,6 +25,21 @@ module "security_groups" {
   tags                                 = local.base_tags
 }
 
+module "secrets_manager" {
+  source = "../modules/secrets-manager"
+
+  name_prefix = var.name_prefix
+  secrets = {
+    ecommerce_mongodb_atlas_uri = {
+      name_suffix = "ecommerce/mongodb-atlas/uri"
+      description = "MongoDB Atlas connection URI for the E-commerce backend."
+      workload    = "ecommerce"
+    }
+  }
+  recovery_window_in_days = 7
+  tags                    = local.base_tags
+}
+
 module "iam" {
   source = "../modules/iam"
 
@@ -34,7 +49,7 @@ module "iam" {
 
   ecr_repository_arns = { for workload, arn in module.ecr.repository_arns : workload => [arn] }
   log_group_arns      = var.iam_log_group_arns
-  secret_arns         = var.iam_secret_arns
+  secret_arns         = merge(var.iam_secret_arns, { ecommerce = concat(lookup(var.iam_secret_arns, "ecommerce", []), [module.secrets_manager.secret_arns["ecommerce_mongodb_atlas_uri"]]) })
   kms_key_arns        = var.iam_kms_key_arns
 
   enable_test_worker_orchestration = false
