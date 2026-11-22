@@ -45,6 +45,7 @@ inventory to stdout:
 docker run --rm \
   -e DCC_AGENT_MODE=discover_ecs \
   -e AWS_REGION=us-east-1 \
+  -e DCC_DISCOVERY_CLUSTERS=my-project-cluster \
   dcc-agent:0.1.0
 ~~~
 
@@ -71,7 +72,7 @@ boundary and the deferred authentication/authorization layer.
 
 The container uses the AWS credential provider chain. In ECS, attach a
 least-privilege Task Role; do not pass static AWS access keys or bake credentials
-into the image. Discovery is bounded to 20 clusters and 50 services per cluster.
+into the image. Discovery is restricted to the explicit DCC_DISCOVERY_CLUSTERS allowlist (1-20 cluster names or ARNs), and is bounded to 50 services per cluster.
 
 The first release discovers ECS clusters and services only. ALB, VPC, RDS, ECR,
 CloudWatch and relationship-graph discovery are not yet implemented by this
