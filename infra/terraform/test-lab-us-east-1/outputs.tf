@@ -47,3 +47,8 @@ output "route_table_ids" {
   description = "Route table IDs by network tier."
   value       = module.network.route_table_ids
 }
+
+output "security_group_ids" {
+  description = "Security Group IDs keyed by workload tier."
+  value       = module.security_groups.security_group_ids
+}
