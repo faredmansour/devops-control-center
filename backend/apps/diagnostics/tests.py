@@ -1651,6 +1651,7 @@ class StatelessRunAPITests(SimpleTestCase):
 
     @patch("apps.diagnostics.views.uuid4")
     @patch("apps.diagnostics.views._lifecycle")
+    @override_settings(DCC_ECS_CLUSTERS=["workloads"])
     def test_discovery_callback_is_accepted_and_exposed_in_run_result(
         self, lifecycle_factory, uuid_factory
     ):
