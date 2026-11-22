@@ -1,6 +1,6 @@
 mock_provider "aws" {}
 
-run "creates_seven_isolated_security_groups_with_safe_defaults" {
+run "creates_nine_separate_workload_security_groups_with_safe_ingress_defaults" {
   command = plan
 
   variables {
@@ -11,66 +11,73 @@ run "creates_seven_isolated_security_groups_with_safe_defaults" {
   }
 
   assert {
-    condition     = length(aws_security_group.this) == 7
-    error_message = "The module must create exactly seven tier-specific Security Groups."
+    condition     = length(aws_security_group.this) == 9
+    error_message = "The module must create nine isolated workload Security Groups."
   }
 
   assert {
-    condition     = length(aws_vpc_security_group_ingress_rule.alb_https) == 1
-    error_message = "Only the explicitly approved operator CIDR should receive ALB HTTPS ingress."
+    condition     = length(aws_vpc_security_group_ingress_rule.dcc_alb_https) == 1 && length(aws_vpc_security_group_ingress_rule.ecommerce_alb_https) == 0
+    error_message = "Only the explicitly approved DCC operator CIDR should receive ingress by default."
   }
 
   assert {
-    condition     = length(aws_vpc_security_group_egress_rule.dcc_control_https) == 0 && length(aws_vpc_security_group_egress_rule.diagnostic_worker_https) == 0 && length(aws_vpc_security_group_egress_rule.test_api_https) == 0 && length(aws_vpc_security_group_egress_rule.test_worker_https) == 0 && length(aws_vpc_security_group_egress_rule.diagnostic_worker_http) == 0
-    error_message = "Public egress must remain disabled by default."
+    condition     = length(aws_vpc_security_group_ingress_rule.ecommerce_backend_from_frontend) == 1 && length(aws_vpc_security_group_ingress_rule.ecommerce_backend_from_diagnostic_worker) == 1 && length(aws_vpc_security_group_ingress_rule.ecommerce_backend_from_test_worker) == 1
+    error_message = "The E-commerce API must accept traffic only from the frontend and approved temporary workers."
   }
 
   assert {
-    condition     = length(aws_vpc_security_group_ingress_rule.database_from_test_workloads) == 2 && length(aws_vpc_security_group_ingress_rule.cache_from_test_workloads) == 2
-    error_message = "Database and cache ingress must be limited to the test API and test worker."
+    condition     = aws_vpc_security_group_egress_rule.ecommerce_backend_to_atlas.from_port == 27017 && aws_vpc_security_group_egress_rule.ecommerce_backend_to_atlas.cidr_ipv4 == "0.0.0.0/0"
+    error_message = "The E-commerce backend must have only TCP 27017 egress for public Atlas connectivity; Atlas IP Access List constrains the remote source."
   }
 
   assert {
-    condition     = aws_vpc_security_group_ingress_rule.dcc_control_from_alb.from_port == 8000 && aws_vpc_security_group_ingress_rule.dcc_control_from_diagnostic_worker.from_port == 8000 && aws_vpc_security_group_ingress_rule.test_api_from_dcc_control.from_port == 8080 && aws_vpc_security_group_ingress_rule.test_api_from_diagnostic_worker.from_port == 8080
-    error_message = "Internal ingress must follow the approved DCC and diagnostic traffic matrix."
+    condition     = length(aws_vpc_security_group_ingress_rule.cache_from_ecommerce_backend) == 1
+    error_message = "The optional cache must accept connections only from the E-commerce backend."
+  }
+
+  assert {
+    condition     = length(aws_vpc_security_group_ingress_rule.dcc_control_from_alb) == 1 && length(aws_vpc_security_group_ingress_rule.dcc_control_from_test_worker) == 1
+    error_message = "DCC control ingress must be limited to its ALB and temporary test workers."
   }
 }
 
-run "allows_egress_only_to_explicitly_approved_cidrs" {
+run "allows_only_explicit_public_ingress_and_optional_https_egress" {
   command = plan
 
   variables {
-    name_prefix                          = "dcc-sg-test"
-    vpc_id                               = "vpc-0123456789abcdef0"
-    operator_ingress_cidrs               = []
-    dcc_control_https_egress_cidrs       = ["198.51.100.0/24"]
+    name_prefix               = "dcc-sg-test"
+    vpc_id                    = "vpc-0123456789abcdef0"
+    operator_ingress_cidrs    = []
+    ecommerce_ingress_cidrs   = ["198.51.100.10/32"]
+    dcc_control_https_egress_cidrs = ["198.51.100.0/24"]
     diagnostic_worker_https_egress_cidrs = ["198.51.101.0/24"]
-    test_api_https_egress_cidrs          = ["198.51.102.0/24"]
-    test_worker_https_egress_cidrs       = ["198.51.103.0/24"]
-    diagnostic_public_http_egress_cidrs  = ["203.0.113.0/24"]
+    test_worker_https_egress_cidrs = ["198.51.102.0/24"]
+    diagnostic_public_http_egress_cidrs = ["203.0.113.0/24"]
   }
 
   assert {
-    condition     = length(aws_vpc_security_group_ingress_rule.alb_https) == 0
-    error_message = "An empty approved CIDR list must leave the ALB without inbound rules."
+    condition     = length(aws_vpc_security_group_ingress_rule.dcc_alb_https) == 0 && length(aws_vpc_security_group_ingress_rule.ecommerce_alb_https) == 1
+    error_message = "Each public ALB ingress policy must be controlled by its own explicit allowlist."
   }
 
   assert {
-    condition     = length(aws_vpc_security_group_egress_rule.dcc_control_https) == 1 && length(aws_vpc_security_group_egress_rule.diagnostic_worker_https) == 1 && length(aws_vpc_security_group_egress_rule.test_api_https) == 1 && length(aws_vpc_security_group_egress_rule.test_worker_https) == 1 && length(aws_vpc_security_group_egress_rule.diagnostic_worker_http) == 2
-    error_message = "Explicit egress opt-ins must create only their documented rules."
+    condition     = length(aws_vpc_security_group_egress_rule.dcc_control_https) == 1 && length(aws_vpc_security_group_egress_rule.diagnostic_worker_https) == 1 && length(aws_vpc_security_group_egress_rule.test_worker_https) == 1 && length(aws_vpc_security_group_egress_rule.diagnostic_worker_http) == 2
+    error_message = "Optional public egress must create only explicitly configured rules."
   }
 }
 
-run "rejects_invalid_operator_cidr" {
+run "rejects_invalid_operator_or_ecommerce_cidr" {
   command = plan
 
   variables {
-    name_prefix            = "dcc-sg-test"
-    vpc_id                 = "vpc-0123456789abcdef0"
-    operator_ingress_cidrs = ["not-a-cidr"]
+    name_prefix             = "dcc-sg-test"
+    vpc_id                  = "vpc-0123456789abcdef0"
+    operator_ingress_cidrs  = ["not-a-cidr"]
+    ecommerce_ingress_cidrs = ["also-not-a-cidr"]
   }
 
   expect_failures = [
     var.operator_ingress_cidrs,
+    var.ecommerce_ingress_cidrs,
   ]
 }
