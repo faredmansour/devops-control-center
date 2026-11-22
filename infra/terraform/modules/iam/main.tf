@@ -105,11 +105,17 @@ locals {
       {
         Sid      = "RunOnlyApprovedTestWorkerTaskDefinitions"
         Effect   = "Allow"
-        Action   = ["ecs:RunTask", "ecs:DescribeTaskDefinition"]
+        Action   = ["ecs:RunTask"]
         Resource = var.test_worker_task_definition_arns
         Condition = {
           ArnEquals = { "ecs:cluster" = var.ecs_cluster_arn }
         }
+      },
+      {
+        Sid      = "DescribeOnlyApprovedTestWorkerTaskDefinitions"
+        Effect   = "Allow"
+        Action   = ["ecs:DescribeTaskDefinition"]
+        Resource = var.test_worker_task_definition_arns
       },
       {
         Sid      = "InspectAndStopOnlyTasksInDedicatedCluster"
