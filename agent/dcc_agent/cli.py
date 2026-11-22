@@ -44,7 +44,7 @@ def main() -> int:
                     "schema_version": 1,
                     "run_id": config.run_id,
                     "test_type": "ecs_discovery",
-                    "result_status": "healthy",
+                    "result_status": "failed" if inventory["unresolved_clusters"] else "healthy",
                     "summary": (
                         f"Discovered {inventory['counts']['clusters']} ECS clusters "
                         f"and {inventory['counts']['services']} ECS services."
@@ -66,7 +66,7 @@ def main() -> int:
                 "services": inventory["counts"]["services"],
                 "truncated": inventory["truncated"],
             }))
-            return 0
+            return 1 if inventory["unresolved_clusters"] else 0
 
 
         result = inspect_target_task(
