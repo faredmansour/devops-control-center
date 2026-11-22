@@ -53,6 +53,13 @@ class AgentConfig:
                 raise AgentConfigurationError(
                     "Runtime health mode is missing required job configuration."
                 )
+        if mode == "discover_ecs" and bool(config.callback_url) != bool(
+            config.run_id and config.callback_token
+        ):
+            raise AgentConfigurationError(
+                "ECS discovery callback configuration is incomplete."
+            )
+        if config.callback_url:
             parsed = urlsplit(config.callback_url)
             if (
                 parsed.scheme not in {"http", "https"}
