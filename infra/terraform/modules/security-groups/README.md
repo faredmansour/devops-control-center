@@ -23,7 +23,7 @@ The module creates nine groups: `dcc_alb`, `ecommerce_alb`, `dcc_control`, `dcc_
 
 - DCC operator ingress and E-commerce ingress are independent CIDR allowlists. Both default to empty.
 - No SSH/RDP ingress is created. No direct public ingress exists for application tasks, agent, workers, or cache.
-- The DCC Agent has no inbound rules. Its exact authenticated communication path is still to be finalized; this module does not yet authorize a control-plane connection for the agent.
+- The DCC Agent has no inbound rules. It may initiate TCP 8000 to DCC Control, and DCC Control accepts that traffic from the agent SG only. Application-level authentication and authorization remain mandatory.
 - MongoDB Atlas is external to the VPC. Only the E-commerce backend should receive the Atlas connection secret. Require TLS and restrict Atlas Network Access/IP Access List to the NAT Gateway Elastic IP (or use PrivateLink after a separate design review).
 - Public Atlas connectivity requires backend egress on TCP 27017. Because Atlas endpoint IPs can change and Security Groups do not support FQDN allowlists, this rule currently uses `0.0.0.0/0` on **only TCP 27017**. Atlas IP Access List and the stable NAT EIP provide the remote restriction. This is an explicit, documented exception—not unrestricted all-port egress. If a stricter network boundary is required, evaluate Atlas PrivateLink or maintained destination prefix lists before apply.
 - Redis is optional and private; it accepts connections only from the E-commerce backend.
