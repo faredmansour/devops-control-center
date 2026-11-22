@@ -22,20 +22,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
           cache: pip
           cache-dependency-path: backend/requirements.txt
-
       - name: Install dependencies
         run: python -m pip install -r requirements.txt
-
       - name: Django checks
         run: python manage.py check
-
       - name: Run tests
         run: python manage.py test
 
@@ -48,20 +44,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-
       - name: Install dependencies
         run: npm ci
-
       - name: Typecheck
         run: npm run typecheck
-
       - name: Production build
         run: npm run build
 
@@ -72,32 +64,33 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Build production image
         run: docker build --tag dcc:ci .
 
   terraform:
-    name: Terraform format and validation
+    name: Terraform format and validation (${{ matrix.root }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        root:
+          - infra/terraform/test-lab
+          - infra/terraform/test-lab-us-east-1
     defaults:
       run:
-        working-directory: infra/terraform/test-lab
+        working-directory: ${{ matrix.root }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.10.5
           terraform_wrapper: false
-
       - name: Check Terraform formatting
         run: terraform fmt -check -recursive
-
       - name: Initialize Terraform without backend
-        run: terraform init -backend=false -input=false -lockfile=readonly
-
+        run: terraform init -backend=false -input=false
       - name: Validate Terraform configuration
         run: terraform validate -no-color
 
@@ -110,7 +103,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -119,9 +111,7 @@ jobs:
           cache-dependency-path: |
             test-app/requirements.txt
             test-app/requirements-dev.txt
-
       - name: Install dependencies
         run: python -m pip install -r requirements-dev.txt
-
       - name: Run tests
         run: pytest -q
