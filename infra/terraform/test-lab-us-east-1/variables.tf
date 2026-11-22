@@ -85,6 +85,12 @@ variable "operator_ingress_cidrs" {
   default     = []
 }
 
+variable "ecommerce_ingress_cidrs" {
+  description = "Approved IPv4 CIDRs allowed to reach the E-commerce ALB over HTTPS. Empty means no public ingress."
+  type        = list(string)
+  default     = []
+}
+
 variable "dcc_control_https_egress_cidrs" {
   description = "Approved IPv4 CIDRs that DCC Control may reach over HTTPS."
   type        = list(string)
@@ -93,12 +99,6 @@ variable "dcc_control_https_egress_cidrs" {
 
 variable "diagnostic_worker_https_egress_cidrs" {
   description = "Approved IPv4 CIDRs that diagnostic workers may reach over HTTPS."
-  type        = list(string)
-  default     = []
-}
-
-variable "test_api_https_egress_cidrs" {
-  description = "Approved IPv4 CIDRs that the test API may reach over HTTPS."
   type        = list(string)
   default     = []
 }
