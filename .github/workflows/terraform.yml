@@ -33,10 +33,10 @@ jobs:
           terraform_version: 1.10.5
           terraform_wrapper: false
       - name: Check root formatting
-        run: terraform fmt -check -recursive
+        run: terraform fmt -check -diff -recursive
 
       - name: Check shared module formatting
-        run: terraform fmt -check -recursive ../modules
+        run: terraform fmt -check -diff -recursive ../modules
       - name: Initialize without backend
         run: terraform init -backend=false -input=false
       - name: Validate configuration
@@ -57,7 +57,7 @@ jobs:
           terraform_version: 1.10.5
           terraform_wrapper: false
       - name: Check module formatting
-        run: terraform fmt -check -recursive
+        run: terraform fmt -check -diff -recursive
       - name: Initialize without backend
         run: terraform init -backend=false -input=false
       - name: Run mocked Security Groups tests
@@ -78,7 +78,7 @@ jobs:
           terraform_version: 1.10.5
           terraform_wrapper: false
       - name: Check module formatting
-        run: terraform fmt -check -recursive
+        run: terraform fmt -check -diff -recursive
       - name: Initialize without backend
         run: terraform init -backend=false -input=false
       - name: Run mocked network tests
