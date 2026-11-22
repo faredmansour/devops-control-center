@@ -116,6 +116,8 @@ class ECSDiagnosticExecutionProviderTests(TestCase):
             environment,
             [
                 {"name": "DIAGNOSTIC_SESSION_ID", "value": session_id},
+                {"name": "AWS_REGION", "value": "us-east-1"},
+                {"name": "DCC_AGENT_MODE", "value": "runtime_health"},
                 {"name": "TARGET_TASK_ID", "value": "task-001"},
                 {"name": "TARGET_CLUSTER_ARN", "value": "arn:aws:ecs:region:123:cluster/workloads"},
             ],
