@@ -121,6 +121,33 @@ class ECSDiagnosticExecutionProviderTests(TestCase):
             ],
         )
 
+    def test_start_supports_discovery_mode_without_target_task(self) -> None:
+        self.client.run_task.return_value = {
+            "tasks": [{"taskArn": "arn:aws:ecs:us-east-1:123:task/agent"}],
+            "failures": [],
+        }
+
+        self.provider.start(
+            "123e4567-e89b-42d3-a456-426614174000",
+            None,
+            extra_environment={
+                "DCC_AGENT_MODE": "discover_ecs",
+                "DCC_RESULT_CALLBACK_URL": "https://dcc.internal/result/",
+                "DCC_RESULT_CALLBACK_TOKEN": "signed-token",
+            },
+        )
+
+        environment = self.client.run_task.call_args.kwargs[
+            "overrides"
+        ]["containerOverrides"][0]["environment"]
+        names = [item["name"] for item in environment]
+        self.assertEqual(names.count("DCC_AGENT_MODE"), 1)
+        self.assertIn(
+            {"name": "DCC_AGENT_MODE", "value": "discover_ecs"},
+            environment,
+        )
+        self.assertNotIn("TARGET_TASK_ID", names)
+
     def test_start_rejects_missing_task_arn(self) -> None:
         self.client.run_task.return_value = {"tasks": [], "failures": []}
 
