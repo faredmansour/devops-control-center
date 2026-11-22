@@ -1587,6 +1587,40 @@ class StatelessRunAPITests(SimpleTestCase):
             120,
         )
 
+    @patch("apps.diagnostics.views.uuid4")
+    @patch("apps.diagnostics.views._lifecycle")
+    @override_settings(
+        DCC_RESULT_CALLBACK_BASE_URL="https://dcc.internal",
+        DCC_STATELESS_RUN_API_ENABLED=True,
+    )
+    def test_create_ecs_discovery_run_does_not_require_target_task(
+        self, lifecycle_factory, uuid_factory
+    ):
+        uuid_factory.return_value = self.RUN_ID
+        lifecycle_factory.return_value = self.lifecycle
+
+        response = self.client.post(
+            "/api/diagnostic-sessions/runs/",
+            {
+                "schema_version": 1,
+                "test_type": "ecs_discovery",
+                "environment": "staging",
+                "limits": {"max_duration_seconds": 120},
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data["test_type"], "ecs_discovery")
+        self.discovery.get_running_task.assert_not_called()
+        kwargs = self.lifecycle.start.call_args.kwargs
+        self.assertIsNone(kwargs["target_task_id"])
+        self.assertIsNone(kwargs["target_cluster_arn"])
+        self.assertEqual(
+            kwargs["runner_environment"]["DCC_AGENT_MODE"], "discover_ecs"
+        )
+        self.assertTrue(kwargs["runner_environment"]["DCC_RESULT_CALLBACK_TOKEN"])
+
     @patch("apps.diagnostics.views._lifecycle")
     def test_status_uses_signed_capability_and_ecs(self, lifecycle_factory):
         lifecycle_factory.return_value = self.lifecycle
