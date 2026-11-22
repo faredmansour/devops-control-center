@@ -36,18 +36,18 @@ run "creates_seven_isolated_security_groups_with_safe_defaults" {
   }
 }
 
-run "allows_public_egress_only_when_explicitly_enabled" {
+run "allows_egress_only_to_explicitly_approved_cidrs" {
   command = plan
 
   variables {
     name_prefix                           = "dcc-sg-test"
     vpc_id                                = "vpc-0123456789abcdef0"
     operator_ingress_cidrs                = []
-    enable_dcc_control_https_egress       = true
-    enable_diagnostic_worker_https_egress = true
-    enable_test_api_https_egress          = true
-    enable_test_worker_https_egress       = true
-    enable_diagnostic_public_http_egress  = true
+    dcc_control_https_egress_cidrs          = ["198.51.100.0/24"]
+    diagnostic_worker_https_egress_cidrs    = ["198.51.101.0/24"]
+    test_api_https_egress_cidrs             = ["198.51.102.0/24"]
+    test_worker_https_egress_cidrs          = ["198.51.103.0/24"]
+    diagnostic_public_http_egress_cidrs     = ["203.0.113.0/24"]
   }
 
   assert {
