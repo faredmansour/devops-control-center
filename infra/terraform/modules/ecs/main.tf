@@ -1,6 +1,6 @@
 locals {
   log_group_names = {
-    dcc                 = "/ecs/${var.name_prefix}/dcc"
+    dcc                = "/ecs/${var.name_prefix}/dcc"
     ecommerce_frontend = "/ecs/${var.name_prefix}/ecommerce-frontend"
     ecommerce_backend  = "/ecs/${var.name_prefix}/ecommerce-backend"
   }
@@ -125,9 +125,9 @@ resource "aws_ecs_task_definition" "dcc" {
   execution_role_arn       = var.dcc_execution_role_arn
   task_role_arn            = var.dcc_task_role_arn
   container_definitions = jsonencode([{
-    name      = "dcc"
-    image     = var.dcc_image
-    essential = true
+    name         = "dcc"
+    image        = var.dcc_image
+    essential    = true
     portMappings = [{ containerPort = 8000, hostPort = 8000, protocol = "tcp" }]
     environment = [
       { name = "AWS_REGION", value = var.aws_region },
@@ -165,9 +165,9 @@ resource "aws_ecs_task_definition" "ecommerce_frontend" {
   execution_role_arn       = var.ecommerce_execution_role_arn
   task_role_arn            = var.ecommerce_task_role_arn
   container_definitions = jsonencode([{
-    name      = "ecommerce-frontend"
-    image     = var.ecommerce_frontend_image
-    essential = true
+    name         = "ecommerce-frontend"
+    image        = var.ecommerce_frontend_image
+    essential    = true
     portMappings = [{ containerPort = 80, hostPort = 80, protocol = "tcp" }]
     healthCheck = {
       command     = ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
@@ -197,9 +197,9 @@ resource "aws_ecs_task_definition" "ecommerce_backend" {
   execution_role_arn       = var.ecommerce_execution_role_arn
   task_role_arn            = var.ecommerce_task_role_arn
   container_definitions = jsonencode([{
-    name      = "ecommerce-backend"
-    image     = var.ecommerce_backend_image
-    essential = true
+    name         = "ecommerce-backend"
+    image        = var.ecommerce_backend_image
+    essential    = true
     portMappings = [{ containerPort = 8000, hostPort = 8000, protocol = "tcp" }]
     environment = [
       { name = "NODE_ENV", value = "production" },
