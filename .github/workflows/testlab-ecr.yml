@@ -2,14 +2,6 @@ name: Build and push DCC image to Test Lab ECR
 
 on:
   workflow_dispatch:
-  push:
-    branches: [feat/test-lab-us-east-1-isolated]
-    paths:
-      - "backend/**"
-      - "frontend/**"
-      - "Dockerfile"
-      - "docker-entrypoint.sh"
-      - ".github/workflows/testlab-ecr.yml"
 
 permissions:
   contents: read
