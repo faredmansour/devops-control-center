@@ -52,7 +52,7 @@ The module creates seven groups: `alb`, `dcc_control`, `diagnostic_worker`, `tes
 ## Important limitations
 
 - This module defines network-layer permissions only. It does not create ALB listeners, TLS certificates, application authentication, database credentials, Redis authentication, secrets, or VPC endpoints.
-- Public HTTPS egress uses `0.0.0.0/0:443` when enabled. Prefer VPC endpoints and narrower destination controls where practical.
+- Optional public egress rules are restricted to explicitly supplied destination CIDRs; broad `0.0.0.0/0` egress is not configured by this module. Prefer VPC endpoints where practical.
 - Security Groups are stateful; response traffic for permitted connections does not need a reverse rule.
 - DNS resolver access is governed by VPC resolver behavior and cannot be controlled with ordinary SG rules targeting AmazonProvidedDNS.
 - A plan review and, after approval, read-only post-deployment inspection must verify the effective AWS rules.
