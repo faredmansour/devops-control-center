@@ -40,14 +40,14 @@ run "allows_public_egress_only_when_explicitly_enabled" {
   command = plan
 
   variables {
-    name_prefix                          = "dcc-sg-test"
-    vpc_id                               = "vpc-0123456789abcdef0"
-    operator_ingress_cidrs               = []
-    enable_dcc_control_https_egress      = true
+    name_prefix                           = "dcc-sg-test"
+    vpc_id                                = "vpc-0123456789abcdef0"
+    operator_ingress_cidrs                = []
+    enable_dcc_control_https_egress       = true
     enable_diagnostic_worker_https_egress = true
-    enable_test_api_https_egress         = true
-    enable_test_worker_https_egress      = true
-    enable_diagnostic_public_http_egress = true
+    enable_test_api_https_egress          = true
+    enable_test_worker_https_egress       = true
+    enable_diagnostic_public_http_egress  = true
   }
 
   assert {
