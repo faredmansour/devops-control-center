@@ -1,7 +1,11 @@
 variable "name_prefix" {
   description = "Prefix used for workload IAM role names."
   type        = string
-  validation { condition = length(var.name_prefix) >= 3 && length(var.name_prefix) <= 48, error_message = "name_prefix must be between 3 and 48 characters." }
+
+  validation {
+    condition     = length(var.name_prefix) >= 3 && length(var.name_prefix) <= 48
+    error_message = "name_prefix must be between 3 and 48 characters."
+  }
 }
 
 variable "aws_region" {
@@ -12,7 +16,11 @@ variable "aws_region" {
 variable "aws_account_id" {
   description = "12-digit AWS account ID used to constrain ECS task trust."
   type        = string
-  validation { condition = can(regex("^[0-9]{12}$", var.aws_account_id)), error_message = "aws_account_id must contain exactly 12 digits." }
+
+  validation {
+    condition     = can(regex("^[0-9]{12}$", var.aws_account_id))
+    error_message = "aws_account_id must contain exactly 12 digits."
+  }
 }
 
 variable "ecr_repository_arns" {
@@ -50,6 +58,7 @@ variable "enable_test_worker_orchestration" {
   description = "Enable scoped ECS test-worker orchestration permissions on the DCC task role."
   type        = bool
   default     = false
+
   validation {
     condition = !var.enable_test_worker_orchestration || (
       length(var.ecs_cluster_arn) > 0 &&
