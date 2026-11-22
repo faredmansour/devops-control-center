@@ -36,11 +36,6 @@ def discover_ecs(ecs_client: Any) -> dict[str, Any]:
                 "registered_container_instances": cluster.get("registeredContainerInstancesCount", 0),
                 "running_tasks": cluster.get("runningTasksCount", 0),
                 "pending_tasks": cluster.get("pendingTasksCount", 0),
-                "tags": [
-                    {"key": item.get("key"), "value": item.get("value")}
-                    for item in cluster.get("tags", [])
-                    if item.get("key", "").lower() not in {"secret", "token", "password"}
-                ],
                 "services": [],
             })
 
