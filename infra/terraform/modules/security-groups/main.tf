@@ -1,13 +1,10 @@
 locals {
   security_groups = {
-    dcc_alb = {
-      description = "DCC HTTPS entry point; ingress is restricted to approved operator/VPN CIDRs."
-    }
-    ecommerce_alb = {
-      description = "E-commerce HTTPS entry point; ingress is explicitly configurable and empty by default."
+    alb = {
+      description = "Shared HTTP entry point for the isolated DCC and E-commerce test applications."
     }
     dcc_control = {
-      description = "DCC control-plane API; accepts traffic only from its ALB and approved test workers."
+      description = "DCC control-plane API; accepts traffic only from the shared ALB and approved test workers."
     }
     dcc_agent = {
       description = "Reusable DCC integration agent; no inbound network access."
@@ -46,32 +43,32 @@ resource "aws_security_group" "this" {
   })
 }
 
-resource "aws_vpc_security_group_ingress_rule" "dcc_alb_https" {
-  for_each = toset(var.operator_ingress_cidrs)
+resource "aws_vpc_security_group_ingress_rule" "alb_http" {
+  for_each = toset(var.alb_ingress_cidrs)
 
-  security_group_id = aws_security_group.this["dcc_alb"].id
-  description       = "HTTPS from explicitly approved DCC operator/VPN CIDRs."
+  security_group_id = aws_security_group.this["alb"].id
+  description       = "HTTP test access to the shared ALB on ports 80 and 8080."
   cidr_ipv4         = each.value
-  from_port         = 443
-  to_port           = 443
+  from_port         = 80
+  to_port           = 80
   ip_protocol       = "tcp"
 }
 
-resource "aws_vpc_security_group_ingress_rule" "ecommerce_alb_https" {
-  for_each = toset(var.ecommerce_ingress_cidrs)
+resource "aws_vpc_security_group_ingress_rule" "alb_dcc_http" {
+  for_each = toset(var.alb_ingress_cidrs)
 
-  security_group_id = aws_security_group.this["ecommerce_alb"].id
-  description       = "HTTPS from explicitly approved E-commerce client CIDRs."
+  security_group_id = aws_security_group.this["alb"].id
+  description       = "HTTP test access to the DCC listener on port 8080."
   cidr_ipv4         = each.value
-  from_port         = 443
-  to_port           = 443
+  from_port         = 8080
+  to_port           = 8080
   ip_protocol       = "tcp"
 }
 
 resource "aws_vpc_security_group_ingress_rule" "dcc_control_from_alb" {
   security_group_id            = aws_security_group.this["dcc_control"].id
-  description                  = "DCC control API traffic from the DCC ALB."
-  referenced_security_group_id = aws_security_group.this["dcc_alb"].id
+  description                  = "DCC control API traffic from the shared ALB."
+  referenced_security_group_id = aws_security_group.this["alb"].id
   from_port                    = 8000
   to_port                      = 8000
   ip_protocol                  = "tcp"
@@ -97,17 +94,17 @@ resource "aws_vpc_security_group_ingress_rule" "dcc_control_from_test_worker" {
 
 resource "aws_vpc_security_group_ingress_rule" "ecommerce_frontend_from_alb" {
   security_group_id            = aws_security_group.this["ecommerce_frontend"].id
-  description                  = "HTTP from the E-commerce ALB to the Nginx frontend."
-  referenced_security_group_id = aws_security_group.this["ecommerce_alb"].id
+  description                  = "HTTP from the shared ALB to the Nginx frontend."
+  referenced_security_group_id = aws_security_group.this["alb"].id
   from_port                    = 80
   to_port                      = 80
   ip_protocol                  = "tcp"
 }
 
-resource "aws_vpc_security_group_ingress_rule" "ecommerce_backend_from_frontend" {
+resource "aws_vpc_security_group_ingress_rule" "ecommerce_backend_from_alb" {
   security_group_id            = aws_security_group.this["ecommerce_backend"].id
-  description                  = "Express API traffic from the E-commerce frontend/reverse proxy."
-  referenced_security_group_id = aws_security_group.this["ecommerce_frontend"].id
+  description                  = "API and health-check traffic from the shared ALB."
+  referenced_security_group_id = aws_security_group.this["alb"].id
   from_port                    = 8000
   to_port                      = 8000
   ip_protocol                  = "tcp"
@@ -140,27 +137,27 @@ resource "aws_vpc_security_group_ingress_rule" "cache_from_ecommerce_backend" {
   ip_protocol                  = "tcp"
 }
 
-resource "aws_vpc_security_group_egress_rule" "dcc_alb_to_control" {
-  security_group_id            = aws_security_group.this["dcc_alb"].id
-  description                  = "Forward DCC HTTPS listener traffic to the DCC API."
+resource "aws_vpc_security_group_egress_rule" "alb_to_dcc_control" {
+  security_group_id            = aws_security_group.this["alb"].id
+  description                  = "Forward DCC listener traffic to the DCC API."
   referenced_security_group_id = aws_security_group.this["dcc_control"].id
   from_port                    = 8000
   to_port                      = 8000
   ip_protocol                  = "tcp"
 }
 
-resource "aws_vpc_security_group_egress_rule" "ecommerce_alb_to_frontend" {
-  security_group_id            = aws_security_group.this["ecommerce_alb"].id
-  description                  = "Forward E-commerce HTTPS listener traffic to Nginx."
+resource "aws_vpc_security_group_egress_rule" "alb_to_ecommerce_frontend" {
+  security_group_id            = aws_security_group.this["alb"].id
+  description                  = "Forward E-commerce web traffic to Nginx."
   referenced_security_group_id = aws_security_group.this["ecommerce_frontend"].id
   from_port                    = 80
   to_port                      = 80
   ip_protocol                  = "tcp"
 }
 
-resource "aws_vpc_security_group_egress_rule" "ecommerce_frontend_to_backend" {
-  security_group_id            = aws_security_group.this["ecommerce_frontend"].id
-  description                  = "Frontend reverse-proxy traffic to the Express API."
+resource "aws_vpc_security_group_egress_rule" "alb_to_ecommerce_backend" {
+  security_group_id            = aws_security_group.this["alb"].id
+  description                  = "Forward E-commerce API, health, and upload traffic to Express."
   referenced_security_group_id = aws_security_group.this["ecommerce_backend"].id
   from_port                    = 8000
   to_port                      = 8000
@@ -169,7 +166,7 @@ resource "aws_vpc_security_group_egress_rule" "ecommerce_frontend_to_backend" {
 
 resource "aws_vpc_security_group_egress_rule" "ecommerce_backend_to_atlas" {
   security_group_id = aws_security_group.this["ecommerce_backend"].id
-  description       = "MongoDB Atlas TLS connection; destination is constrained by Atlas IP Access List to the NAT EIP."
+  description       = "MongoDB Atlas TLS connection; Atlas IP Access List constrains the remote source."
   cidr_ipv4         = "0.0.0.0/0"
   from_port         = 27017
   to_port           = 27017
