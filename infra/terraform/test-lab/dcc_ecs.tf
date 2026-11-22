@@ -1,5 +1,6 @@
 locals {
-  dcc_app_image = "${aws_ecr_repository.dcc_app.repository_url}@${var.dcc_app_image_digest}"
+  dcc_app_image   = "${aws_ecr_repository.dcc_app.repository_url}@${var.dcc_app_image_digest}"
+  dcc_agent_image = "${aws_ecr_repository.dcc_agent.repository_url}@${var.dcc_agent_image_digest}"
 }
 
 resource "aws_secretsmanager_secret" "dcc_django_key" {
@@ -184,10 +185,9 @@ resource "aws_ecs_task_definition" "diagnostic_runner" {
   container_definitions = jsonencode([
     {
       name      = "diagnostic-runner"
-      image     = local.dcc_app_image
+      image     = local.dcc_agent_image
       essential = true
       user      = "10001:10001"
-      command   = ["python", "-m", "apps.diagnostics.runner"]
       environment = [
         { name = "AWS_REGION", value = var.aws_region },
         { name = "AWS_DEFAULT_REGION", value = var.aws_region },
