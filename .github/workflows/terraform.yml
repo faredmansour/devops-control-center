@@ -32,8 +32,11 @@ jobs:
         with:
           terraform_version: 1.10.5
           terraform_wrapper: false
-      - name: Check formatting
+      - name: Check root formatting
         run: terraform fmt -check -recursive
+
+      - name: Check shared module formatting
+        run: terraform fmt -check -recursive ../modules
       - name: Initialize without backend
         run: terraform init -backend=false -input=false
       - name: Validate configuration
