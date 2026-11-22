@@ -14,7 +14,7 @@ Creates the DCC Test Lab's reusable least-privilege Security Group layer.
 | Database | PostgreSQL 5432 from Test API and Test Worker | No explicit egress rules |
 | Cache | Redis 6379 from Test API and Test Worker | No explicit egress rules |
 
-All rules are managed exclusively with standalone `aws_vpc_security_group_ingress_rule` and `aws_vpc_security_group_egress_rule` resources. The `aws_security_group` resources intentionally do not declare inline `ingress` or `egress` arguments. This avoids mixing the two rule-management models.
+All rules are managed exclusively with standalone `aws_vpc_security_group_ingress_rule` and `aws_vpc_security_group_egress_rule` resources. The `aws_security_group` resources intentionally do not declare inline `ingress` or `egress` arguments. This avoids mixing the two rule-management models and preserves a single Terraform owner for each rule.
 
 ## Safe defaults
 
