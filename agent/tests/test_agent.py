@@ -51,7 +51,7 @@ class DiscoveryTests(unittest.TestCase):
         ecs = Mock()
         ecs.describe_clusters.return_value = {"clusters": [{
             "clusterArn": "cluster-arn",
-            "clusterName": "sample",
+            "clusterName": "sample-cluster",
             "status": "ACTIVE",
             "runningTasksCount": 2,
             "tags": [{"key": "environment", "value": "staging"}],
