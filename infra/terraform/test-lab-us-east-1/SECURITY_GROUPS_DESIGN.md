@@ -1,52 +1,62 @@
-# Security Groups — us-east-1 Test Lab Design Review
+# Security Groups — us-east-1 Test Lab Design
 
-**Status:** Proposal for review only. No AWS resources or existing security groups are changed by this document.
+**Status:** Initial implementation is available in `infra/terraform/modules/security-groups`; review and plan validation are still required before any apply.
 
 ## Design principles
 
-- Create a new VPC and new security groups in `us-east-1`; never import or reference IDs from `eu-north-1`.
+- Create new Security Groups in the independent `us-east-1` VPC; never import or reference IDs from `eu-north-1`.
 - Keep ECS tasks in private application subnets with `assign_public_ip = false`.
 - Keep RDS and Redis in private data subnets, with no public ingress.
-- Use security-group references for east-west application traffic; do not use VPC-wide CIDRs for database/API access.
-- Prefer explicit standalone ingress/egress rule resources and avoid mixing inline rules with standalone rule resources for the same SG.
+- Use security-group references for east-west traffic; do not use VPC-wide CIDRs for workload-to-workload access.
+- Manage all rules with standalone `aws_vpc_security_group_*_rule` resources. The `aws_security_group` resources must not declare inline `ingress` or `egress` arguments.
 - No broad ingress on any task or data security group.
 
-## Proposed traffic matrix
+## Implemented traffic matrix
 
 | Source SG | Destination SG | Protocol/port | Direction | Decision |
 |---|---|---:|---|---|
-| Approved admin CIDRs / VPN ingress | DCC ALB SG | TCP 443 | Ingress | Allow only approved source ranges; do not default to world-open |
-| DCC ALB SG | DCC Control SG | TCP 8000 | Egress / ingress | Allow |
-| Diagnostic Worker SG | DCC Control SG | TCP 8000 | Egress / ingress | Allow signed result callback |
+| Approved admin CIDRs / VPN ingress | ALB SG | TCP 443 | Ingress | Allow only explicitly approved source ranges |
+| ALB SG | DCC Control SG | TCP 8000 | Egress / ingress | Allow |
+| Diagnostic Worker SG | DCC Control SG | TCP 8000 | Egress / ingress | Allow diagnostic result callbacks |
 | DCC Control SG | Test API SG | TCP 8080 | Egress / ingress | Allow |
-| Diagnostic Worker SG | Test API SG | TCP 8080 | Egress / ingress | Allow scoped diagnostic access |
-| Test API SG | RDS SG | TCP 5432 | Egress / ingress | Allow |
-| Test Worker SG | RDS SG | TCP 5432 | Egress / ingress | Allow |
-| Test API SG | Redis SG | TCP 6379 | Egress / ingress | Allow |
-| Test Worker SG | Redis SG | TCP 6379 | Egress / ingress | Allow |
+| Diagnostic Worker SG | Test API SG | TCP 8080 | Egress / ingress | Allow scoped diagnostic probes |
+| Test API SG | Database SG | TCP 5432 | Egress / ingress | Allow |
+| Test Worker SG | Database SG | TCP 5432 | Egress / ingress | Allow |
+| Test API SG | Cache SG | TCP 6379 | Egress / ingress | Allow |
+| Test Worker SG | Cache SG | TCP 6379 | Egress / ingress | Allow |
 
-## Required changes versus the current regional template
+The module creates seven groups: `alb`, `dcc_control`, `diagnostic_worker`, `test_api`, `test_worker`, `database`, and `cache`.
 
-1. **ALB listener:** the existing template documents HTTP/80 only. The new environment should use an HTTPS/443 listener with an ACM certificate. If HTTP/80 is retained, it should only redirect to HTTPS and should not forward application traffic.
-2. **ALB source restriction:** parameterize allowed ingress CIDRs. Default should be empty / fail closed until an approved operator CIDR or VPN range is supplied. Do not silently expose the DCC dashboard to `0.0.0.0/0`.
-3. **Outbound HTTPS:** existing task SG rules permit TCP/443 to `0.0.0.0/0`. Keep this only where required for image startup and external AWS APIs; prefer VPC endpoints for ECR API/DKR, CloudWatch Logs, Secrets Manager, and S3 where supported. Document any remaining external destinations and consider an egress proxy/firewall for FQDN-aware policy.
-4. **Database/cache:** preserve SG-to-SG ingress only. Never add public CIDR ingress for 5432 or 6379.
-5. **Default egress:** explicitly review whether provider-created default egress is removed. Do not assume that an SG with no inline egress block is deny-all. The resulting AWS rules must be checked from a fresh plan and read-only post-deployment inspection.
-6. **Rule ownership:** do not declare empty inline `ingress`/`egress` collections alongside standalone `aws_vpc_security_group_*_rule` resources. The previous Test Lab encountered drift/removal plans from that pattern.
-7. **Authentication boundary:** the DCC API currently defers application authentication. Do not make unauthenticated API endpoints publicly reachable. Until auth is implemented, restrict ALB ingress to an approved operator network/VPN and keep internal APIs private.
+## Default-deny and optional public egress
 
-## Review gates before apply
+- `operator_ingress_cidrs` defaults to an empty list. Until approved CIDRs are supplied, the ALB has no inbound rule.
+- Public HTTPS egress for DCC Control, Diagnostic Worker, Test API, and Test Worker is independently opt-in and defaults to `false`.
+- Diagnostic public HTTP/HTTPS probing is separately opt-in and defaults to `false`.
+- Database and Cache have no public ingress and no explicit public egress rules.
+- No SSH/RDP ingress is created.
+- ALB HTTP/80 is not exposed. If required, add it only with a separately implemented and reviewed HTTP-to-HTTPS redirect listener.
 
-- Confirm allowed admin CIDRs or VPN ingress.
-- Confirm ACM certificate ARN / domain ownership in `us-east-1`.
-- Confirm every VPC/subnet CIDR is non-overlapping with all connected networks.
-- Confirm no cross-region SG IDs, subnet IDs, RDS endpoints, Redis endpoints, or Cloud Map namespace IDs are reused.
-- Confirm ECR images have been built/pushed in `us-east-1` and task definitions pin immutable digests.
-- Inspect the full Terraform plan: no reference to or change against the `eu-north-1` state/resources.
-- Verify no `0.0.0.0/0` ingress except an explicitly approved HTTPS public entry point.
-- Verify RDS/Redis are private and database ingress is SG-scoped.
-- Preserve independent state and backend key for this environment.
+## Required review gates before apply
 
-## Current scope
+1. Confirm approved admin CIDRs or VPN ingress.
+2. Confirm the actual container ports: DCC Control TCP 8000 and Test API TCP 8080.
+3. Confirm ACM certificate ARN and domain ownership in `us-east-1`.
+4. Confirm all VPC/subnet CIDRs are non-overlapping with connected networks.
+5. Confirm no cross-region SG IDs, subnet IDs, RDS endpoints, Redis endpoints, or Cloud Map namespace IDs are reused.
+6. Confirm ECR images have been built/pushed in `us-east-1` and task definitions pin immutable digests.
+7. Inspect the full Terraform plan: no reference to or change against the `eu-north-1` state/resources.
+8. Verify no `0.0.0.0/0` ingress except an explicitly approved HTTPS entry point.
+9. Verify RDS/Redis are private and database/cache ingress is SG-scoped.
+10. Preserve independent state and backend key for this environment.
 
-This is a security design review artifact, not an executable SG module. The existing regional Terraform stack has dependencies across networking, IAM, ECR, Cloud Map, RDS, Redis, ECS and DCC. A full independent stack must be copied/refactored and validated as a whole before applying; do not run Terraform from this documentation directory.
+## Important limitations
+
+- This module defines network-layer permissions only. It does not create ALB listeners, TLS certificates, application authentication, database credentials, Redis authentication, secrets, or VPC endpoints.
+- Public HTTPS egress uses `0.0.0.0/0:443` when enabled. Prefer VPC endpoints and narrower destination controls where practical.
+- Security Groups are stateful; response traffic for permitted connections does not need a reverse rule.
+- DNS resolver access is governed by VPC resolver behavior and cannot be controlled with ordinary SG rules targeting AmazonProvidedDNS.
+- A plan review and, after approval, read-only post-deployment inspection must verify the effective AWS rules.
+
+## State safety
+
+The module is composed only into `test-lab-us-east-1`. Do not run state migration, apply, or destroy against the existing `eu-north-1` environment as part of this work.
