@@ -144,3 +144,8 @@ variable "iam_kms_key_arns" {
   type        = map(list(string))
   default     = {}
 }
+variable "enable_application_services" {
+  description = "Set true only after all three images are pushed and both E-commerce secrets have values."
+  type        = bool
+  default     = false
+}
