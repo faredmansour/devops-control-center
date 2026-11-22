@@ -52,3 +52,8 @@ output "security_group_ids" {
   description = "Security Group IDs keyed by workload tier."
   value       = module.security_groups.security_group_ids
 }
+
+output "nat_gateway_public_ip" {
+  description = "Stable outbound public IP to allowlist in MongoDB Atlas, or null when NAT is disabled."
+  value       = module.network.nat_gateway_public_ip
+}
