@@ -6,11 +6,11 @@
 
 The lab contains two separate application boundaries:
 - **DCC Control Plane:** owns DCC orchestration and user-facing APIs.
-- **E-commerce Target:** a separate application whose frontend, backend/API, and PostgreSQL database must be isolated from DCC.
+- **E-commerce Target:** a separate application whose frontend, backend/API, and MongoDB database must be isolated from DCC.
 
 The DCC Agent / Integration Kit and temporary Test Workers are separate execution identities/components. The agent must not expose a public management port. Test Workers must be temporary and restricted to explicitly approved targets.
 
-E-commerce PostgreSQL must be dedicated to E-commerce. It must not be shared with DCC. The E-commerce backend is the normal database client; frontend tasks must never connect directly to PostgreSQL.
+E-commerce MongoDB must be dedicated to E-commerce. It must not be shared with DCC. The E-commerce backend is the normal MongoDB client; frontend tasks must never connect directly to PostgreSQL.
 
 ## 2. Currently implemented initial traffic matrix
 
@@ -48,7 +48,7 @@ Do not assume the DCC and E-commerce applications should share one ALB, task rol
 - `operator_ingress_cidrs` defaults to an empty list. Until approved CIDRs are supplied, the ALB has no inbound rule.
 - Public HTTPS egress for DCC Control, Diagnostic Worker, Test API, and Test Worker is controlled by explicit destination CIDR allowlists, all empty by default.
 - Diagnostic public HTTP/HTTPS probing uses a separate explicit destination CIDR allowlist, also empty by default.
-- Database and Cache have no public ingress and no explicit public egress rules.
+- MongoDB and Cache have no public ingress and no explicit public egress rules.
 - No SSH/RDP ingress is created.
 - ALB HTTP/80 is not exposed. If required, add it only with a separately implemented and reviewed HTTP-to-HTTPS redirect listener.
 
@@ -60,14 +60,14 @@ Do not assume the DCC and E-commerce applications should share one ALB, task rol
 4. Confirm ACM certificate ARN and domain ownership in `us-east-1`, if a public HTTPS ALB is selected.
 5. Confirm all VPC/subnet CIDRs are non-overlapping with connected networks.
 6. Confirm ECR images have been built/pushed in `us-east-1` and task definitions pin immutable digests.
-7. Confirm E-commerce database ingress is limited to its backend and approved maintenance path only.
+7. Confirm E-commerce MongoDB ingress is limited to its backend and approved maintenance path only.
 8. Verify no `0.0.0.0/0` ingress except an explicitly approved HTTPS entry point.
 9. Inspect the full Terraform plan: no reference to or change against the `eu-north-1` state/resources.
 10. Preserve independent state and backend key for this environment.
 
 ## 6. Important limitations
 
-- This module defines network-layer permissions only. It does not create ALB listeners, TLS certificates, application authentication, database credentials, Redis authentication, secrets, or VPC endpoints.
+- This module defines network-layer permissions only. It does not create ALB listeners, TLS certificates, application authentication, MongoDB credentials, Redis authentication, secrets, or VPC endpoints.
 - Optional public egress rules are restricted to explicitly supplied destination CIDRs; broad `0.0.0.0/0` egress is not configured by this module. Prefer VPC endpoints where practical.
 - Security Groups are stateful; response traffic for permitted connections does not need a reverse rule.
 - DNS resolver access is governed by VPC resolver behavior and cannot be controlled with ordinary SG rules targeting AmazonProvidedDNS.
