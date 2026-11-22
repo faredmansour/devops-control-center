@@ -19,6 +19,7 @@ class AgentConfigTests(unittest.TestCase):
         with patch.dict("os.environ", {
             "DCC_AGENT_MODE": "discover_ecs",
             "AWS_REGION": "eu-central-1",
+            "DCC_DISCOVERY_CLUSTERS": "sample-cluster",
         }, clear=True):
             config = AgentConfig.from_env()
         self.assertEqual(config.mode, "discover_ecs")
@@ -48,7 +49,6 @@ class RuntimeHealthTests(unittest.TestCase):
 class DiscoveryTests(unittest.TestCase):
     def test_discovers_clusters_and_services(self):
         ecs = Mock()
-        ecs.list_clusters.return_value = {"clusterArns": ["cluster-arn"]}
         ecs.describe_clusters.return_value = {"clusters": [{
             "clusterArn": "cluster-arn",
             "clusterName": "sample",
@@ -67,7 +67,8 @@ class DiscoveryTests(unittest.TestCase):
             "launchType": "FARGATE",
         }]}
 
-        result = discover_ecs(ecs)
+        result = discover_ecs(ecs, ("sample-cluster",))
+        ecs.describe_clusters.assert_called_once_with(clusters=["sample-cluster"])
         self.assertEqual(result["counts"], {"clusters": 1, "services": 1})
         self.assertEqual(result["clusters"][0]["services"][0]["name"], "web")
         ecs.describe_services.assert_called_once_with(
