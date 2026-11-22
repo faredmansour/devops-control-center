@@ -38,7 +38,8 @@ normalized result to the control plane.
 
 ### ECS discovery
 
-Run discovery only when explicitly requested:
+Run discovery only when explicitly requested. Standalone mode prints a bounded
+inventory to stdout:
 
 ~~~bash
 docker run --rm \
@@ -46,6 +47,27 @@ docker run --rm \
   -e AWS_REGION=us-east-1 \
   dcc-agent:0.1.0
 ~~~
+
+The Control Plane can also launch the same image for a manual discovery run.
+It supplies DIAGNOSTIC_SESSION_ID, DCC_RESULT_CALLBACK_URL and
+DCC_RESULT_CALLBACK_TOKEN; the Agent posts the inventory to the existing
+short-lived result callback. The API request is:
+
+~~~http
+POST /api/diagnostic-sessions/runs/
+Content-Type: application/json
+
+{
+  "schema_version": 1,
+  "test_type": "ecs_discovery",
+  "environment": "staging",
+  "limits": {"max_duration_seconds": 120}
+}
+~~~
+
+The endpoint remains disabled unless DCC_STATELESS_RUN_API_ENABLED is enabled.
+Do not enable it on a public endpoint before configuring the private network
+boundary and the deferred authentication/authorization layer.
 
 The container uses the AWS credential provider chain. In ECS, attach a
 least-privilege Task Role; do not pass static AWS access keys or bake credentials
