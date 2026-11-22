@@ -1,35 +1,87 @@
-# DCC Test Lab — us-east-1 (Independent Environment)
+# DCC Test Lab — us-east-1
 
-**Status: preparation/review only — not deployable yet.**
+**Status:** Network module implementation started. Review and validation are still required; no AWS resources have been deployed by this change.
 
-This directory records the proposed inputs and security design for a second, independent Test Lab in AWS `us-east-1`. The existing Test Lab in `eu-north-1` must remain untouched.
+## Purpose and isolation
 
-## Isolation requirements
+This is an independent Terraform root for a second DCC Test Lab in `us-east-1`. The existing `eu-north-1` environment and its Terraform state must remain untouched.
 
-- Separate Terraform root/state and a distinct remote backend key.
-- Distinct AWS resource names and tags (prefix: `dcc-testlab-use1`).
-- New VPC/subnets/security groups in `us-east-1`; no IDs or endpoints copied from the Stockholm environment.
-- No Terraform workspace/state sharing with `infra/terraform/test-lab`.
-- No apply, import, destroy, or state migration against the existing environment.
-- Images must be pushed to ECR in `us-east-1`; image digests from another region are not automatically available.
+- Separate root directory and future remote-state key.
+- Unique resource prefix: `dcc-testlab-use1`.
+- Proposed VPC CIDR: `10.81.0.0/16`; connected-network overlap review is still required.
+- No reuse of region-scoped IDs, endpoints, subnet IDs, SG IDs, or ECR image references from eu-north-1.
+- No state migration, import, destroy, or apply against the existing regional environment.
 
-## Files
+## Current directory structure
 
-- `terraform.tfvars.example`: proposed non-secret region/network values.
-- `SECURITY_GROUPS_DESIGN.md`: proposed traffic matrix and security review gates.
+```text
+infra/terraform/
+├── modules/
+│   └── network/
+│       ├── main.tf
+│       ├── variables.tf
+│       ├── outputs.tf
+│       ├── versions.tf
+│       └── README.md
+└── test-lab-us-east-1/
+    ├── main.tf
+    ├── variables.tf
+    ├── locals.tf
+    ├── providers.tf
+    ├── versions.tf
+    ├── outputs.tf
+    ├── terraform.tfvars.example
+    ├── SECURITY_GROUPS_DESIGN.md
+    └── TERRAFORM_ARCHITECTURE.md
+```
 
-## Important blockers before this can become an executable Terraform root
+## Implemented in this stage
 
-The existing stack in `infra/terraform/test-lab` includes interdependent resources for VPC, NAT, security groups, IAM, ECR, Cloud Map, RDS, Redis, ECS, DCC and diagnostic execution. This directory intentionally does not pretend that a variables file alone is a complete Terraform root. The next implementation step is to create a full independent root (or a reusable module instantiated with separate state), audit every region-scoped dependency, and validate the complete plan.
+The reusable Network module currently defines:
 
-## Required inputs not yet approved
+- One VPC with DNS support and hostnames.
+- Two public subnets.
+- Two private application subnets.
+- Two private data subnets.
+- Internet Gateway and public route table.
+- One optional NAT Gateway and private-application default route.
+- A separate private-data route table with no internet default route.
+- Subnet CIDR containment and overlap preconditions.
+- Two-AZ selection and availability checks.
 
-1. CIDR overlap review for `10.81.0.0/16` against all VPCs, VPNs, peering/TGW routes, office networks and connected customer networks.
-2. Approved DCC ingress source CIDRs or VPN range; fail closed until supplied.
-3. ACM certificate ARN/domain for HTTPS in `us-east-1`.
-4. Confirmed image digests pushed into the new region's ECR repositories.
-5. Approved remote Terraform backend bucket/key and IAM permissions.
+The root composes this module and exposes non-secret network outputs.
 
-## Cost and safety
+## How to read the code
 
-The existing design includes a NAT Gateway, ECS/Fargate, RDS and ElastiCache. A second copy incurs additional recurring charges. Cost must be reviewed before apply. No AWS resource is created by adding these files.
+1. Start at this root's `main.tf`: it shows which modules make up the environment.
+2. Open `modules/network/variables.tf`: these are the inputs the module needs.
+3. Open `modules/network/main.tf`: this is where AWS network resources are created.
+4. Open `modules/network/outputs.tf`: these are the values other modules can consume.
+5. Read `modules/network/README.md` for the network flow, cost, and security explanation.
+
+## Validation workflow
+
+Run from this directory using an approved AWS credential profile. These commands do not create infrastructure:
+
+```powershell
+Copy-Item terraform.tfvars.example terraform.tfvars
+terraform init -backend=false
+terraform fmt -check -recursive
+terraform validate
+terraform plan -refresh=false -input=false
+```
+
+The plan with `-refresh=false` checks the proposed configuration without querying current AWS resource state; provider data sources may still require AWS read access. A later normal plan will require AWS read permissions and a completed CIDR overlap review. Neither plan authorizes apply.
+
+## Not implemented yet
+
+Security Groups, IAM, ECR, RDS, Redis, Cloud Map, ECS, ALB, HTTPS/ACM, VPC endpoints, remote state bootstrap, and cost validation are future stages. The SG design is documented in `SECURITY_GROUPS_DESIGN.md`, but it is not yet executable Terraform.
+
+## Deployment blockers
+
+- Confirm `10.81.0.0/16` does not overlap any connected networks.
+- Approve the AWS account and region for this environment.
+- Review NAT Gateway recurring costs and one-AZ egress dependency.
+- Provision and approve an independent encrypted/versioned S3 state backend before deployment.
+- Review the complete Terraform plan and verify that it cannot affect eu-north-1.
+- Obtain explicit deployment approval before any `terraform apply`.
