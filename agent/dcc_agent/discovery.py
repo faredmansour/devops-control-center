@@ -13,11 +13,16 @@ def discover_ecs(ecs_client: Any, cluster_identifiers: tuple[str, ...]) -> dict[
     clusters: list[dict[str, Any]] = []
     truncated = False
 
+    resolved_identifiers: set[str] = set()
     for offset in range(0, len(cluster_identifiers), 100):
         response = ecs_client.describe_clusters(
             clusters=list(cluster_identifiers[offset:offset + 100])
         )
         for cluster in response.get("clusters", []):
+            if cluster.get("clusterArn"):
+                resolved_identifiers.add(cluster["clusterArn"])
+            if cluster.get("clusterName"):
+                resolved_identifiers.add(cluster["clusterName"])
             clusters.append({
                 "arn": cluster.get("clusterArn"),
                 "name": cluster.get("clusterName"),
@@ -68,6 +73,10 @@ def discover_ecs(ecs_client: Any, cluster_identifiers: tuple[str, ...]) -> dict[
         "provider": "aws",
         "discovery_scope": ["ecs.clusters", "ecs.services"],
         "truncated": truncated,
+        "requested_clusters": len(cluster_identifiers),
+        "unresolved_clusters": [
+            item for item in cluster_identifiers if item not in resolved_identifiers
+        ],
         "counts": {
             "clusters": len(clusters),
             "services": sum(len(item["services"]) for item in clusters),
