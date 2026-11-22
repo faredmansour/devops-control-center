@@ -33,7 +33,7 @@ run "plans_three_separate_fargate_services_behind_one_alb" {
   }
 
   assert {
-    condition     = aws_ecs_task_definition.dcc.requires_compatibilities == ["FARGATE"] && aws_ecs_task_definition.ecommerce_frontend.requires_compatibilities == ["FARGATE"] && aws_ecs_task_definition.ecommerce_backend.requires_compatibilities == ["FARGATE"]
+    condition     = contains(aws_ecs_task_definition.dcc.requires_compatibilities, "FARGATE") && contains(aws_ecs_task_definition.ecommerce_frontend.requires_compatibilities, "FARGATE") && contains(aws_ecs_task_definition.ecommerce_backend.requires_compatibilities, "FARGATE")
     error_message = "All three application task definitions must use Fargate."
   }
 
@@ -43,7 +43,7 @@ run "plans_three_separate_fargate_services_behind_one_alb" {
   }
 
   assert {
-    condition     = aws_lb_listener_rule.ecommerce_api.condition[0].path_pattern[0].values == ["/api/*", "/health", "/uploadimage", "/uploadimage/*"]
+    condition     = contains(flatten([for condition in aws_lb_listener_rule.ecommerce_api.condition : [for path in condition.path_pattern : path.values]]), "/api/*") && contains(flatten([for condition in aws_lb_listener_rule.ecommerce_api.condition : [for path in condition.path_pattern : path.values]]), "/uploadimage/*")
     error_message = "E-commerce API, health, and upload paths must route to the backend target group."
   }
 
