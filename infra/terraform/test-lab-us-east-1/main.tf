@@ -52,7 +52,15 @@ module "iam" {
   aws_account_id = data.aws_caller_identity.current.account_id
 
   ecr_repository_arns = { for workload, arn in module.ecr.repository_arns : workload => [arn] }
-  log_group_arns      = var.iam_log_group_arns
+  log_group_arns = merge(var.iam_log_group_arns, {
+    dcc = [
+      "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/ecs/${var.name_prefix}/dcc"
+    ]
+    ecommerce = [
+      "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/ecs/${var.name_prefix}/ecommerce-frontend",
+      "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/ecs/${var.name_prefix}/ecommerce-backend"
+    ]
+  })
   secret_arns         = merge(var.iam_secret_arns, { ecommerce = concat(lookup(var.iam_secret_arns, "ecommerce", []), [module.secrets_manager.secret_arns["ecommerce_mongodb_atlas_uri"]]) })
   kms_key_arns        = var.iam_kms_key_arns
 
