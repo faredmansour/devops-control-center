@@ -17,9 +17,9 @@ module "security_groups" {
   name_prefix                          = var.name_prefix
   vpc_id                               = module.network.vpc_id
   operator_ingress_cidrs               = var.operator_ingress_cidrs
+  ecommerce_ingress_cidrs              = var.ecommerce_ingress_cidrs
   dcc_control_https_egress_cidrs       = var.dcc_control_https_egress_cidrs
   diagnostic_worker_https_egress_cidrs = var.diagnostic_worker_https_egress_cidrs
-  test_api_https_egress_cidrs          = var.test_api_https_egress_cidrs
   test_worker_https_egress_cidrs       = var.test_worker_https_egress_cidrs
   diagnostic_public_http_egress_cidrs  = var.diagnostic_public_http_egress_cidrs
   tags                                 = local.base_tags
