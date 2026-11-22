@@ -79,16 +79,28 @@ variable "common_tags" {
   default     = {}
 }
 
-variable "operator_ingress_cidrs" {
-  description = "Approved IPv4 CIDRs allowed to reach the ALB over HTTPS. Empty means no public ingress."
+variable "alb_ingress_cidrs" {
+  description = "Approved client IPv4 CIDRs allowed to reach the shared HTTP test ALB. Use your public IP /32 for restricted testing."
   type        = list(string)
   default     = []
 }
 
-variable "ecommerce_ingress_cidrs" {
-  description = "Approved IPv4 CIDRs allowed to reach the E-commerce ALB over HTTPS. Empty means no public ingress."
-  type        = list(string)
-  default     = []
+variable "dcc_image_tag" {
+  description = "Immutable DCC image tag already pushed to the regional ECR repository."
+  type        = string
+  default     = "bootstrap"
+}
+
+variable "ecommerce_frontend_image_tag" {
+  description = "Immutable E-commerce frontend image tag already pushed to the shared ECR repository."
+  type        = string
+  default     = "frontend-bootstrap"
+}
+
+variable "ecommerce_backend_image_tag" {
+  description = "Immutable E-commerce backend image tag already pushed to the shared ECR repository."
+  type        = string
+  default     = "backend-bootstrap"
 }
 
 variable "dcc_control_https_egress_cidrs" {
