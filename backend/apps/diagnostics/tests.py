@@ -1619,6 +1619,7 @@ class StatelessRunAPITests(SimpleTestCase):
     @override_settings(
         DCC_RESULT_CALLBACK_BASE_URL="https://dcc.internal",
         DCC_STATELESS_RUN_API_ENABLED=True,
+        DCC_ECS_CLUSTERS=["workloads"],
     )
     def test_create_ecs_discovery_run_does_not_require_target_task(
         self, lifecycle_factory, uuid_factory
