@@ -62,7 +62,7 @@ def _run_capability(run_id: str, execution: ExecutionReference, request_data: di
             "provider": execution.provider,
             "task_arn": execution.reference,
             "cluster": execution.cluster,
-            "target_task_id": request_data["target_task_id"],
+            "target_task_id": request_data.get("target_task_id"),
             "test_type": request_data["test_type"],
             "environment": request_data["environment"],
             "limits": request_data["limits"],
