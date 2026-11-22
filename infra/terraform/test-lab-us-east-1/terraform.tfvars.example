@@ -40,3 +40,6 @@ ecommerce_backend_image_tag = "backend-bootstrap"
 common_tags = {
   Owner = "replace-with-owner"
 }
+
+# Keep at false until images and both secret values are ready.
+enable_application_services = false
