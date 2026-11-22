@@ -22,7 +22,7 @@ DCC provides the user-facing control plane: project/environment registration, te
 
 ### B. E-commerce Target Application
 
-E-commerce is a separately deployed application and the primary target used to validate DCC's capabilities. Its React/Vite frontend, Node.js/Express 5 backend/API, and dedicated MongoDB database (Mongoose) belong to the E-commerce workload boundary. The MongoDB database is dedicated to E-commerce and is not shared with DCC. Redis is an optional cache integration; it is not a substitute for the persistent MongoDB data store.
+E-commerce is a separately deployed application and the primary target used to validate DCC's capabilities. Its React/Vite frontend and Node.js/Express 5 backend/API belong to the E-commerce workload boundary. **Decision: MongoDB Atlas is the approved managed database for E-commerce.** Atlas is dedicated to E-commerce and is not shared with DCC. The application connects to Atlas over TLS; the backend alone receives the MongoDB connection secret. Redis is an optional cache integration, not a substitute for persistent MongoDB storage.
 
 **Target repository:** [faredmansour/ecommerce-project](https://github.com/faredmansour/ecommerce-project), branch `master` (reviewed for this design). The repository contains `frontend/` (React/Vite), `backend/` (Node.js/Express 5), root `docker-compose.yml`, and separate frontend/backend Dockerfiles. The backend listens on TCP 8000; the frontend container serves static assets through Nginx on TCP 80. The exact AWS routing/ALB arrangement still needs to be selected and validated before creating listeners or services. Do not infer final topology from the generic Test API SG.
 
@@ -43,7 +43,7 @@ Temporary workers execute explicitly authorized API, load, security, performance
 | DCC Control Plane | Orchestration and user interface/API | DCC application runtime and its required configuration | E-commerce database or E-commerce lifecycle |
 | E-commerce Frontend | Customer-facing web UI | Frontend runtime/assets | DCC credentials or database access |
 | E-commerce Backend | E-commerce API/business logic | Backend runtime and application configuration | DCC control-plane permissions |
-| E-commerce MongoDB | E-commerce persistence | Dedicated database and credentials | DCC application data |
+| E-commerce MongoDB Atlas | Managed E-commerce persistence | Dedicated Atlas cluster/database, database user and connection secret | DCC application data or direct frontend access |
 | DCC Agent / Integration Kit | Secure target-side integration | Minimal integration configuration/identity | Broad AWS administrator permissions |
 | Test Workers | Temporary test execution | Ephemeral execution state and bounded test artifacts | Permanent target credentials or unrestricted target access |
 
@@ -90,7 +90,7 @@ Do not create empty module directories just to make the tree look complete. Add 
 | ecr | repositories, lifecycle and immutability | image build/push credentials |
 | ecs | clusters, task definitions, services | VPC creation, IAM policy authoring |
 | load-balancer | ALB, listeners, target groups, ACM attachment | application authentication |
-| data-services | E-commerce MongoDB/Redis and subnet groups, if selected | application schema/migrations |
+| data-services | AWS-hosted data services such as optional Redis, if selected | MongoDB Atlas resources/network access configuration owned outside this AWS Terraform root |
 | diagnostic-runner | temporary test task definitions and execution configuration | permanent application lifecycle |
 | root | composition, environment values, outputs | detailed resource implementation |
 
@@ -107,7 +107,7 @@ IAM roles must be designed per workload, not shared across the entire lab:
 | DCC Agent role/identity | Authenticate to DCC and perform only its approved integration actions; AWS permissions only if a concrete feature requires them | No broad account discovery or administrative access by default |
 | Test Worker role | Read-only discovery/test permissions scoped to approved resources and the test session | No application deployment, IAM mutation, or unrestricted infrastructure changes |
 
-Repository review confirms the E-commerce stack is React/Vite + Node.js/Express 5 + MongoDB/Mongoose, with Redis and Cloudinary as optional integrations. The current Compose file points `DB_URL` to `mongodb://host.docker.internal:27017/e-commerce` but does not define a MongoDB service. It also builds the frontend with `VITE_API_URL=http://localhost:8000/api`, which is a local-development value and must be replaced at build time for the AWS URL/routing design. The Compose file publishes Redis on the host and configures it as a cache; production network exposure must instead be private and SG-scoped. The Render blueprint's frontend `rootDir` is `frontend final project`, while the repository directory is `frontend`; do not rely on that blueprint as-is for AWS deployment. The AWS staging design must provide a reachable, persistent MongoDB endpoint and inject `DB_URL` through a secret/configuration mechanism. The final policies depend on source-code review and the selected execution model. Use separate task roles even when two containers happen to run in one ECS task. Prefer short-lived credentials, scoped resource ARNs, and explicit trust relationships. Do not create the IAM module until the required API actions, resource scopes, and trust principals have been documented and reviewed.
+Repository review confirms the E-commerce stack is React/Vite + Node.js/Express 5 + MongoDB/Mongoose, with Redis and Cloudinary as optional integrations. The current Compose file points `DB_URL` to `mongodb://host.docker.internal:27017/e-commerce` but does not define a MongoDB service. It also builds the frontend with `VITE_API_URL=http://localhost:8000/api`, which is a local-development value and must be replaced at build time for the AWS URL/routing design. The Compose file publishes Redis on the host and configures it as a cache; production network exposure must instead be private and SG-scoped. The Render blueprint's frontend `rootDir` is `frontend final project`, while the repository directory is `frontend`; do not rely on that blueprint as-is for AWS deployment. The AWS staging design must inject the Atlas `DB_URL` through AWS Secrets Manager (or an equivalently protected secret mechanism), with no URI committed to Git or baked into images. The final policies depend on source-code review and the selected execution model. Use separate task roles even when two containers happen to run in one ECS task. Prefer short-lived credentials, scoped resource ARNs, and explicit trust relationships. Do not create the IAM module until the required API actions, resource scopes, and trust principals have been documented and reviewed.
 
 ## 7. Network and security boundaries
 
@@ -115,7 +115,7 @@ Repository review confirms the E-commerce stack is React/Vite + Node.js/Express 
 - Keep application workloads private where the selected ingress architecture allows it.
 - Do not assume DCC and E-commerce should share one public ALB. Decide whether they need separate ALBs, listeners, host-based routing, or a private target path after reviewing domains, authentication, and exposure requirements.
 - Keep E-commerce frontend, backend, and database access paths explicit. A frontend must not receive database credentials.
-- E-commerce MongoDB is dedicated to E-commerce and accepts connections only from the E-commerce backend (and explicitly approved migration/maintenance path).
+- MongoDB Atlas is external to the VPC and dedicated to E-commerce. Only the E-commerce backend (plus an explicitly approved migration/maintenance path) receives its credentials. Atlas access must be restricted using its Network Access/IP Access List and TLS. Do not create an in-VPC MongoDB SG or expose MongoDB to the public internet.
 - DCC-to-target test traffic must be limited to the required E-commerce API/health endpoints and approved test-worker sources.
 - Prefer an authenticated outbound agent/control channel where possible; do not create public inbound access to the agent.
 - Test Workers must be temporary, isolated, bounded, and unable to reach unrelated workloads.
@@ -145,8 +145,8 @@ In particular:
 ## 10. Cost and operational considerations
 
 - One NAT Gateway is cheaper than one per AZ but creates an AZ dependency and possible cross-AZ data charges. It also incurs hourly and data-processing charges while provisioned.
-- ECS Fargate, ALB, NAT, and managed MongoDB each have independent recurring costs. A managed database should be selected only after the E-commerce persistence and budget requirements are reviewed.
-- A containerized database may reduce initial lab cost but introduces persistence, backup, recovery, and operational responsibilities. It must not be treated as disposable if E-commerce data needs to survive deployments.
+- ECS Fargate, ALB, NAT, and MongoDB Atlas each have independent recurring costs. Atlas is approved to reduce database operations; select its cluster tier and region with the lab budget in mind. The AWS NAT Gateway's Elastic IP is the candidate stable egress identity for Atlas IP Access List when using public TLS connectivity. Atlas PrivateLink is an alternative to evaluate separately because it changes the network design and cost.
+- MongoDB Atlas handles the managed database infrastructure; we remain responsible for database users/roles, network access rules, secret rotation, application-level backup/restore requirements, and selecting an appropriate Atlas backup/tier configuration.
 - Load and security testing can create target, worker, data-transfer, and logging costs. Set hard test limits and clean up temporary workers.
 
 ## 11. Implementation and review sequence
@@ -156,8 +156,8 @@ In particular:
 | 0 | Two-application architecture baseline | Review DCC/E-commerce/Agent/Worker boundaries |
 | 1 | Network module | fmt, validate, CIDR positive/negative checks |
 | 2 | Initial Security Groups module | fmt, validate, mocked policy tests, traffic matrix review |
-| 3 | E-commerce source/deployment review | Repository and stack confirmed; resolve Compose MongoDB and frontend API URL configuration |
-| 4 | Final network/SG topology | Confirm ingress, routing, agent and test-worker paths |
+| 3 | E-commerce source/deployment review | Repository and stack confirmed; replace local Compose MongoDB dependency with Atlas secret injection and correct frontend API URL configuration |
+| 4 | Final network/SG topology | Confirm ingress/routing, agent and test-worker paths, NAT EIP or Atlas PrivateLink connectivity, and narrowly scoped Atlas access |
 | 5 | IAM design and module | Trust-policy and least-privilege review for every workload |
 | 6 | ECR and image build/push | Immutable image digests exist in us-east-1 |
 | 7 | E-commerce deployment | Frontend/API/MongoDB connectivity healthy and isolated |
